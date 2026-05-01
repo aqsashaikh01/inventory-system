@@ -30,7 +30,7 @@ router.post('/generate', protect('admin'), async (req, res) => {
 
       // Create canvas — QR + label below
       const canvasWidth = 300;
-      const canvasHeight = 340;
+      const canvasHeight = 360;
       const canvas = createCanvas(canvasWidth, canvasHeight);
       const ctx = canvas.getContext('2d');
 
@@ -96,8 +96,13 @@ router.get('/scan/:unitCode', protect(), async (req, res) => {
     const user = req.user;
     const locationType = user.location?.type;
     const role = user.role;
+    const userLocationId = user.location?._id?.toString();
 
-    // Return unit info + what action is available
+    // Add this debug log temporarily
+    console.log('Unit dispatchedTo:', unit.dispatchedTo?._id?.toString());
+    console.log('User location:', userLocationId);
+    console.log('Unit status:', unit.status);
+
     let availableAction = null;
 
     if (role === 'admin' || locationType === 'factory') {
@@ -107,11 +112,11 @@ router.get('/scan/:unitCode', protect(), async (req, res) => {
     }
 
     if (locationType === 'shop') {
-      if (unit.status === 'dispatched' && 
-          unit.dispatchedTo?.toString() === user.location._id.toString()) {
+      if (unit.status === 'dispatched' &&
+          unit.dispatchedTo?._id?.toString() === userLocationId) {
         availableAction = 'receive';
-      } else if (unit.status === 'in_shop' && 
-                 unit.currentLocation?.toString() === user.location._id.toString()) {
+      } else if (unit.status === 'in_shop' &&
+                 unit.currentLocation?._id?.toString() === userLocationId) {
         availableAction = 'sell';
       } else {
         availableAction = null;
