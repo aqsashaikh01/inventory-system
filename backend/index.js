@@ -22,6 +22,7 @@ app.use('/api/locations', require('./routes/locations'));
 app.use('/api/products', require('./routes/products'));
 app.use('/api/movements', require('./routes/movements'));
 app.use('/api/dashboard', require('./routes/dashboard'));
+app.use('/api/units', require('./routes/units'));
 
 app.get('/', (req, res) => res.send('Inventory API running'));
 

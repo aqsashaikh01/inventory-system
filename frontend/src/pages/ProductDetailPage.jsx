@@ -15,6 +15,9 @@ export default function ProductDetailPage() {
   const [qrImage, setQrImage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [cacheBust, setCacheBust] = useState('');
+  const [showGenerateQR, setShowGenerateQR] = useState(false);
+const [genQty, setGenQty] = useState(1);
+const [genLoading, setGenLoading] = useState(false);
 
   useEffect(() => {
     api.get(`/products/id/${id}`)
@@ -47,6 +50,28 @@ export default function ProductDetailPage() {
     const file = e.target.files[0];
     if (file) { setNewPhoto(file); setPreview(URL.createObjectURL(file)); }
   };
+
+  const handleGenerateQR = async () => {
+  setGenLoading(true);
+  try {
+    const res = await api.post('/units/generate',
+      { productId: id, quantity: genQty },
+      { responseType: 'blob' }
+    );
+    // Auto download the ZIP
+    const url = window.URL.createObjectURL(new Blob([res.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `QR-${product.sku}-${genQty}units.zip`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+    setShowGenerateQR(false);
+  } catch (err) {
+    alert('Error generating QR codes');
+  } finally {
+    setGenLoading(false);
+  }
+};
 
   const handleSave = async () => {
     setLoading(true);
@@ -257,6 +282,14 @@ export default function ProductDetailPage() {
     }}>
       EDIT PRODUCT
     </button>
+    <button onClick={() => setShowGenerateQR(true)} style={{
+  width: '100%', marginTop: 8, padding: '13px',
+  background: '#fff', color: '#c17f3a',
+  border: '1.5px solid #c17f3a', borderRadius: 4,
+  fontSize: 11, fontWeight: 700, letterSpacing: 2, cursor: 'pointer'
+}}>
+  GENERATE UNIT QR CODES
+</button>
     <button onClick={handleDelete} style={{
       width: '100%', padding: '13px',
       background: '#fff', color: '#991b1b',
@@ -331,6 +364,47 @@ export default function ProductDetailPage() {
           </div>
         </div>
       )}
+      {showGenerateQR && (
+  <div style={{
+    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+    background: 'rgba(26,74,46,0.4)', display: 'flex',
+    alignItems: 'center', justifyContent: 'center', zIndex: 1000
+  }}>
+    <div style={{
+      background: '#fff', borderRadius: 4, padding: 40,
+      maxWidth: 360, width: '90%', border: '1px solid #e8e8e0'
+    }}>
+      <h3 style={{ color: '#1a4a2e', margin: '0 0 4px' }}>Generate Unit QR Codes</h3>
+      <p style={{ color: '#888', fontSize: 13, margin: '0 0 24px' }}>
+        {product.name}
+      </p>
+      <label style={{ color: '#888', fontSize: 10, letterSpacing: 1.5, display: 'block', marginBottom: 8, fontWeight: 700 }}>
+        HOW MANY UNITS?
+      </label>
+      <input
+        type="number" min="1" max="500" value={genQty}
+        onChange={e => setGenQty(Number(e.target.value))}
+        style={{ ...inputStyle, marginBottom: 20 }}
+      />
+      <p style={{ color: '#888', fontSize: 12, marginBottom: 20 }}>
+        A ZIP file with {genQty} unique QR code images will be downloaded. Print and stick one on each unit.
+      </p>
+      <button onClick={handleGenerateQR} disabled={genLoading} style={{
+        width: '100%', padding: '13px', background: '#1a4a2e', color: '#fff',
+        border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 700,
+        letterSpacing: 2, cursor: 'pointer', marginBottom: 8
+      }}>
+        {genLoading ? 'GENERATING...' : `GENERATE & DOWNLOAD ${genQty} QR CODES`}
+      </button>
+      <button onClick={() => setShowGenerateQR(false)} style={{
+        width: '100%', padding: '13px', background: '#f5f5f0', color: '#666',
+        border: '1px solid #e8e8e0', borderRadius: 4, fontSize: 11, cursor: 'pointer'
+      }}>
+        CANCEL
+      </button>
+    </div>
+  </div>
+)}
     </div>
   );
 }

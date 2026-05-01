@@ -6,81 +6,92 @@ import api from '../utils/api';
 
 export default function ScanPage() {
   const { user } = useAuth();
-  const { sku: urlSku } = useParams();
+  const { sku: urlCode } = useParams();
 
   const [step, setStep] = useState('scan');
-  const [product, setProduct] = useState(null);
+  const [unitData, setUnitData] = useState(null);
   const [action, setAction] = useState(null);
-  const [quantity, setQuantity] = useState(1);
   const [shopLocations, setShopLocations] = useState([]);
   const [toLocationId, setToLocationId] = useState('');
-  const [pendingQty, setPendingQty] = useState(0);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [invoice, setInvoice] = useState(null);
 
-  const isFactory = user?.location?.type === 'factory' || user?.role === 'admin';
-  const isShop = user?.location?.type === 'shop';
+  // Sell form fields
+  const [clientName, setClientName] = useState('');
+  const [clientPhone, setClientPhone] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('cash');
 
   useEffect(() => {
-    if (urlSku) fetchProduct(urlSku);
-  }, [urlSku]);
+    if (urlCode) handleScan(urlCode);
+  }, [urlCode]);
 
-  const fetchProduct = async (sku) => {
+  const handleScan = async (code) => {
+    setError('');
     try {
-      const res = await api.get(`/products/sku/${sku}`);
-      const p = res.data;
-      setProduct(p);
+      const unitCode = code.includes('/unit/') ? code.split('/unit/')[1] : code;
+      const res = await api.get(`/units/scan/${unitCode}`);
+      const { unit, availableAction } = res.data;
+      setUnitData({ unit, availableAction });
 
-      if (isFactory) {
+      if (!availableAction) {
+        setError(getStatusMessage(unit.status));
+        setStep('scan');
+        return;
+      }
+
+      if (availableAction === 'stock_in') {
+        await api.post(`/units/stock-in/${unit.unitCode}`);
+        setMessage(`✅ ${unit.unitCode} added to factory inventory`);
+        setStep('done');
+        return;
+      }
+
+      if (availableAction === 'dispatch') {
         const locsRes = await api.get('/locations');
         setShopLocations(locsRes.data.filter(l => l.type === 'shop'));
       }
 
-      if (isShop) {
-        // Check if there's pending stock to receive
-        const pendingRes = await api.get(`/movements/pending/${p._id}`);
-        setPendingQty(pendingRes.data.totalPending);
-      }
-
+      setAction(availableAction);
       setStep('action');
     } catch (err) {
-      setError('Product not found. Try again.');
+      setError(err.response?.data?.error || 'Invalid QR code');
       setStep('scan');
     }
   };
 
-  const handleScan = (sku) => fetchProduct(sku);
-
-  const selectAction = (selectedAction) => {
-    setAction(selectedAction);
-    setStep('confirm');
+  const getStatusMessage = (status) => {
+    const messages = {
+      in_factory: '⚠️ Already in factory inventory',
+      dispatched: '⚠️ Already dispatched to a shop',
+      in_shop: '⚠️ Already in shop inventory',
+      sold: '❌ This unit has already been sold',
+      generated: '⚠️ Not yet processed'
+    };
+    return messages[status] || '❌ Cannot process this unit';
   };
 
   const handleConfirm = async () => {
     setLoading(true);
+    const unitCode = unitData.unit.unitCode;
     try {
-      if (action === 'stock_in') {
-        await api.post('/movements/stock-in', { productId: product._id, quantity });
-        setMessage(`✅ ${quantity} units added to inventory`);
-
-      } else if (action === 'dispatch') {
-        await api.post('/movements/dispatch', { productId: product._id, quantity, toLocationId });
+      if (action === 'dispatch') {
+        await api.post(`/units/dispatch/${unitCode}`, { toLocationId });
         const shop = shopLocations.find(l => l._id === toLocationId);
-        setMessage(`✅ ${quantity} units dispatched to ${shop?.name}`);
-
+        setMessage(`✅ ${unitCode} dispatched to ${shop?.name}`);
+        setStep('done');
       } else if (action === 'receive') {
-        const res = await api.post('/movements/receive', { productId: product._id });
-        setMessage(`✅ ${res.data.quantity} units received into shop inventory`);
-
+        await api.post(`/units/receive/${unitCode}`);
+        setMessage(`✅ ${unitCode} received into shop inventory`);
+        setStep('done');
       } else if (action === 'sell') {
-        const res = await api.post('/movements/sell', {
-          productId: product._id, quantity, paymentMethod: 'cash'
+        const res = await api.post(`/units/sell/${unitCode}`, {
+          clientName, clientPhone, paymentMethod
         });
-        setMessage(`✅ Sold ${quantity}x ${product.name} · Remaining stock: ${res.data.remainingStock}`);
+        setInvoice(res.data.invoice);
+        setStep('invoice');
       }
-
-      setStep('done');
     } catch (err) {
       setError(err.response?.data?.error || 'Something went wrong');
       setStep('action');
@@ -91,32 +102,44 @@ export default function ScanPage() {
 
   const reset = () => {
     setStep('scan');
-    setProduct(null);
+    setUnitData(null);
     setAction(null);
-    setQuantity(1);
     setToLocationId('');
-    setPendingQty(0);
     setMessage('');
     setError('');
     setLoading(false);
+    setInvoice(null);
+    setClientName('');
+    setClientPhone('');
+    setPaymentMethod('cash');
   };
 
+  const sendWhatsApp = () => {
+    if (!invoice?.clientPhone) return;
+    const msg = `Dear ${invoice.clientName},\n\nThank you for your purchase!\n\nInvoice: ${invoice.invoiceNumber}\nProduct: ${invoice.productName}\nUnit: ${invoice.unitCode}\nAmount: ₹${Number(invoice.sellingPrice).toLocaleString('en-IN')}\nPayment: ${invoice.paymentMethod.toUpperCase()}\nDate: ${new Date(invoice.soldAt).toLocaleDateString('en-IN')}\n\nReliable Dairy Equipments, Pune`;
+    window.open(`https://wa.me/91${invoice.clientPhone}?text=${encodeURIComponent(msg)}`);
+  };
+
+  const { unit } = unitData || {};
+
   return (
-    <div style={{ maxWidth: 420, margin: '0 auto', padding: 20, fontFamily: 'sans-serif' }}>
-      <h2 style={{ color: '#1a4a2e', marginBottom: 4, fontFamily: 'Georgia, serif' }}>Scan Product</h2>
+    <div style={{ maxWidth: 420, margin: '0 auto', padding: 20, fontFamily: 'Georgia, serif' }}>
+      <h2 style={{ color: '#1a4a2e', marginBottom: 4 }}>Scan Unit</h2>
       <p style={{ color: '#888', fontSize: 13, marginBottom: 24 }}>
         📍 {user?.location?.name} · {user?.role?.replace('_', ' ')}
       </p>
 
       {error && (
         <div style={{
-          background: '#450a0a', color: '#fca5a5', padding: 12,
-          borderRadius: 8, marginBottom: 16, fontSize: 14,
+          background: '#fef2f2', color: '#991b1b', padding: 12,
+          borderRadius: 4, marginBottom: 16, fontSize: 14,
+          border: '1px solid #fecaca',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center'
         }}>
           {error}
-          <button onClick={() => setError('')} style={{
-            background: 'none', border: 'none', color: '#fca5a5', cursor: 'pointer', fontSize: 18
+          <button onClick={() => { setError(''); setStep('scan'); }} style={{
+            background: 'none', border: 'none', color: '#991b1b',
+            cursor: 'pointer', fontSize: 18
           }}>×</button>
         </div>
       )}
@@ -124,177 +147,250 @@ export default function ScanPage() {
       {/* STEP 1 — Camera */}
       {step === 'scan' && (
         <div>
-          <p style={{ color: '#666', marginBottom: 16, fontSize: 14 }}>
-            Point camera at the product QR sticker
+          <p style={{ color: '#888', marginBottom: 16, fontSize: 14 }}>
+            Point camera at the unit QR sticker
           </p>
           <QRScanner onResult={handleScan} />
-          <p style={{ color: '#475569', fontSize: 12, marginTop: 12, textAlign: 'center' }}>
-            Make sure the QR code is well-lit
+          <p style={{ color: '#aaa', fontSize: 12, marginTop: 12, textAlign: 'center' }}>
+            Each sticker has a unique QR code
           </p>
         </div>
       )}
 
-      {/* STEP 2 — Choose Action */}
-      {step === 'action' && product && (
+      {/* STEP 2 — Action */}
+      {step === 'action' && unit && (
         <div>
           <div style={cardStyle}>
-            <p style={{ color: '#666', fontSize: 12, margin: '0 0 4px' }}>SCANNED PRODUCT</p>
-            <h3 style={{ color: '#1a1a1a', margin: '0 0 4px', fontSize: 20 }}>{product.name}</h3>
-            <p style={{ color: '#64748b', fontSize: 13, margin: '0 0 4px' }}>
-              SKU: {product.sku}
+            <p style={{ color: '#c17f3a', fontSize: 11, letterSpacing: 1, margin: '0 0 4px' }}>
+              SCANNED UNIT
             </p>
-            <p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>
-              Stock here: <strong style={{ color: '#22c55e' }}>{product.stockAtMyLocation}</strong>
-              {pendingQty > 0 && (
-                <span style={{ color: '#f59e0b', marginLeft: 8 }}>
-                  · {pendingQty} units pending receipt
-                </span>
-              )}
+            <h3 style={{ color: '#1a4a2e', margin: '0 0 4px', fontSize: 18 }}>
+              {unit.product?.name}
+            </h3>
+            <p style={{ color: '#888', fontSize: 12, margin: 0 }}>
+              Unit: {unit.unitCode}
             </p>
           </div>
 
-          <p style={{ color: '#666', fontSize: 14, marginBottom: 12 }}>What do you want to do?</p>
-
-          {isFactory && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button onClick={() => selectAction('stock_in')} style={actionBtn('#1a4a2e')}>
-                📥 Add to Inventory
+          {/* DISPATCH */}
+          {action === 'dispatch' && (
+            <>
+              <label style={labelStyle}>SELECT SHOP TO DISPATCH TO</label>
+              <select value={toLocationId} onChange={e => setToLocationId(e.target.value)}
+                style={{ ...inputStyle, marginBottom: 16 }}>
+                <option value="">-- Select outlet --</option>
+                {shopLocations.map(l => (
+                  <option key={l._id} value={l._id}>{l.name}</option>
+                ))}
+              </select>
+              <button onClick={handleConfirm} disabled={!toLocationId || loading}
+                style={{ ...actionBtn('#c17f3a'), opacity: !toLocationId ? 0.5 : 1 }}>
+                {loading ? 'Processing...' : '🚚 Confirm Dispatch'}
               </button>
-              <button onClick={() => selectAction('dispatch')} style={actionBtn('#c17f3a')}>
-                🚚 Dispatch to Shop
-              </button>
-            </div>
+            </>
           )}
 
-          {isShop && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {pendingQty > 0 && (
-                <button onClick={() => selectAction('receive')} style={actionBtn('#1a4a2e')}>
-                  📦 Receive Stock ({pendingQty} units incoming)
-                </button>
-              )}
-              {product.stockAtMyLocation > 0 && (
-                <button onClick={() => selectAction('sell')} style={actionBtn('#c17f3a')}>
-                  💰 Sell (stock: {product.stockAtMyLocation})
-                </button>
-              )}
-            </div>
+          {/* RECEIVE */}
+          {action === 'receive' && (
+            <>
+              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 4, padding: 14, marginBottom: 16 }}>
+                <p style={{ color: '#166534', margin: 0, fontSize: 14 }}>
+                  📦 This unit was dispatched to your shop. Confirm receipt?
+                </p>
+              </div>
+              <button onClick={handleConfirm} disabled={loading} style={actionBtn('#1a4a2e')}>
+                {loading ? 'Processing...' : '📦 Confirm Receive'}
+              </button>
+            </>
+          )}
+
+          {/* SELL */}
+          {action === 'sell' && (
+            <>
+              {/* Product summary */}
+              <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 4, padding: 14, marginBottom: 20 }}>
+                <p style={{ color: '#92400e', margin: '0 0 2px', fontSize: 15, fontWeight: 700 }}>
+                  {unit.product?.name}
+                </p>
+                <p style={{ color: '#92400e', margin: 0, fontSize: 13 }}>
+                  {unit.unitCode} · ₹{Number(unit.product?.sellingPrice).toLocaleString('en-IN')}
+                </p>
+              </div>
+
+              {/* Customer details */}
+              <label style={labelStyle}>CUSTOMER NAME</label>
+              <input
+                placeholder="e.g. Rahul Patil"
+                value={clientName}
+                onChange={e => setClientName(e.target.value)}
+                style={{ ...inputStyle, marginBottom: 14 }}
+              />
+
+              <label style={labelStyle}>WHATSAPP NUMBER</label>
+              <input
+                placeholder="e.g. 9876543210"
+                type="tel"
+                value={clientPhone}
+                onChange={e => setClientPhone(e.target.value)}
+                style={{ ...inputStyle, marginBottom: 14 }}
+              />
+
+              <label style={labelStyle}>PAYMENT METHOD</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 20 }}>
+                {['cash', 'upi', 'card', 'credit'].map(m => (
+                  <button key={m} onClick={() => setPaymentMethod(m)} style={{
+                    padding: '10px', borderRadius: 4, cursor: 'pointer',
+                    border: paymentMethod === m ? '2px solid #1a4a2e' : '1px solid #d4d4c8',
+                    background: paymentMethod === m ? '#f0fdf4' : '#fafaf7',
+                    color: paymentMethod === m ? '#1a4a2e' : '#666',
+                    fontWeight: paymentMethod === m ? 700 : 400,
+                    fontSize: 12, textTransform: 'uppercase', letterSpacing: 1,
+                    fontFamily: 'Georgia, serif'
+                  }}>
+                    {m === 'cash' ? '💵 Cash' :
+                     m === 'upi' ? '📱 UPI' :
+                     m === 'card' ? '💳 Card' : '📒 Credit'}
+                  </button>
+                ))}
+              </div>
+
+              <button onClick={handleConfirm} disabled={loading} style={actionBtn('#1a4a2e')}>
+                {loading ? 'Processing...' : '💰 Confirm Sale'}
+              </button>
+            </>
           )}
 
           <button onClick={reset} style={{
-            marginTop: 16, color: '#475569', background: 'none',
-            border: 'none', cursor: 'pointer', fontSize: 14
+            marginTop: 12, color: '#888', background: 'none',
+            border: 'none', cursor: 'pointer', fontSize: 13, display: 'block'
           }}>
             ← Scan again
           </button>
         </div>
       )}
 
-      {/* STEP 3 — Confirm */}
-      {step === 'confirm' && product && (
+      {/* STEP 3 — Invoice */}
+      {step === 'invoice' && invoice && (
         <div>
-          <div style={cardStyle}>
-            <p style={{ color: '#666', fontSize: 12, margin: '0 0 4px' }}>
-              {action === 'stock_in' ? '📥 ADDING TO INVENTORY' :
-               action === 'dispatch' ? '🚚 DISPATCHING TO SHOP' :
-               action === 'receive' ? '📦 RECEIVING STOCK' : '💰 SELLING'}
-            </p>
-            <h3 style={{ color: '#1a1a1a', margin: '0 0 4px' }}>{product.name}</h3>
-            <p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>SKU: {product.sku}</p>
+          <div style={{ textAlign: 'center', marginBottom: 24 }}>
+            <div style={{ fontSize: 48, marginBottom: 8 }}>✅</div>
+            <h3 style={{ color: '#1a4a2e', margin: 0 }}>Sale Complete</h3>
           </div>
 
-          {/* Receive shows auto quantity — no manual input needed */}
-          {action === 'receive' && (
-            <div style={{
-              background: '#1a2e1a', border: '1px solid #22c55e',
-              borderRadius: 8, padding: 16, marginBottom: 16
-            }}>
-              <p style={{ color: '#22c55e', margin: 0, fontSize: 15 }}>
-                📦 <strong>{pendingQty} units</strong> will be added to your shop inventory
-              </p>
-              <p style={{ color: '#64748b', fontSize: 12, margin: '4px 0 0' }}>
-                Quantity is set automatically based on what was dispatched
-              </p>
+          {/* Invoice card */}
+          <div style={{
+            background: '#fff', border: '1px solid #e8e8e0',
+            borderRadius: 4, overflow: 'hidden', marginBottom: 16
+          }}>
+            {/* Invoice header */}
+            <div style={{ background: '#1a4a2e', padding: '16px 20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <p style={{ color: '#fff', margin: 0, fontWeight: 700, fontSize: 14 }}>
+                    RELIABLE DAIRY EQUIPMENTS
+                  </p>
+                  <p style={{ color: '#a3c4a8', margin: '2px 0 0', fontSize: 11, letterSpacing: 1 }}>
+                    PUNE
+                  </p>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <p style={{ color: '#c17f3a', margin: 0, fontSize: 11, letterSpacing: 1 }}>INVOICE</p>
+                  <p style={{ color: '#fff', margin: '2px 0 0', fontSize: 11 }}>{invoice.invoiceNumber}</p>
+                </div>
+              </div>
             </div>
-          )}
 
-          {/* Stock in and sell need manual quantity */}
-          {(action === 'stock_in' || action === 'sell') && (
-            <>
-              <label style={{ color: '#666', fontSize: 13, display: 'block', marginBottom: 6 }}>
-                Quantity
-              </label>
-              <input
-                type="number" min="1"
-                max={action === 'sell' ? product.stockAtMyLocation : undefined}
-                value={quantity}
-                onChange={e => setQuantity(Number(e.target.value))}
-                style={{ ...inputStyle, marginBottom: 16 }}
-              />
-              {action === 'sell' && (
-                <p style={{ color: '#64748b', fontSize: 12, marginBottom: 16, marginTop: -10 }}>
-                  Max available: {product.stockAtMyLocation}
+            {/* Invoice body */}
+            <div style={{ padding: '20px' }}>
+              {/* Customer */}
+              <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #e8e8e0' }}>
+                <p style={invoiceLabelStyle}>CUSTOMER</p>
+                <p style={invoiceValueStyle}>{invoice.clientName || '—'}</p>
+                {invoice.clientPhone && (
+                  <p style={{ color: '#888', fontSize: 12, margin: '2px 0 0' }}>
+                    +91 {invoice.clientPhone}
+                  </p>
+                )}
+              </div>
+
+              {/* Product */}
+              <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #e8e8e0' }}>
+                <p style={invoiceLabelStyle}>PRODUCT</p>
+                <p style={invoiceValueStyle}>{invoice.productName}</p>
+                <p style={{ color: '#888', fontSize: 11, margin: '2px 0 0', letterSpacing: 0.5 }}>
+                  Unit: {invoice.unitCode}
                 </p>
-              )}
-            </>
+              </div>
+
+              {/* Amount + Payment */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #e8e8e0' }}>
+                <div>
+                  <p style={invoiceLabelStyle}>AMOUNT</p>
+                  <p style={{ color: '#1a4a2e', fontSize: 20, fontWeight: 700, margin: 0 }}>
+                    ₹{Number(invoice.sellingPrice).toLocaleString('en-IN')}
+                  </p>
+                </div>
+                <div>
+                  <p style={invoiceLabelStyle}>PAYMENT</p>
+                  <p style={invoiceValueStyle}>{invoice.paymentMethod?.toUpperCase()}</p>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <p style={invoiceLabelStyle}>DATE</p>
+                  <p style={invoiceValueStyle}>
+                    {new Date(invoice.soldAt).toLocaleDateString('en-IN', {
+                      day: 'numeric', month: 'short', year: 'numeric'
+                    })}
+                  </p>
+                </div>
+                <div>
+                  <p style={invoiceLabelStyle}>SOLD BY</p>
+                  <p style={invoiceValueStyle}>{invoice.soldBy}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Actions */}
+          {invoice.clientPhone && (
+            <button onClick={sendWhatsApp} style={{
+              ...actionBtn('#25d366'),
+              marginBottom: 8,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
+            }}>
+              📱 Send Invoice on WhatsApp
+            </button>
           )}
 
-          {/* Dispatch needs quantity + shop selection */}
-          {action === 'dispatch' && (
-            <>
-              <label style={{ color: '#666', fontSize: 13, display: 'block', marginBottom: 6 }}>
-                Quantity
-              </label>
-              <input
-                type="number" min="1" value={quantity}
-                onChange={e => setQuantity(Number(e.target.value))}
-                style={{ ...inputStyle, marginBottom: 16 }}
-              />
-              <label style={{ color: '#666', fontSize: 13, display: 'block', marginBottom: 6 }}>
-                Select Shop
-              </label>
-              <select
-                value={toLocationId}
-                onChange={e => setToLocationId(e.target.value)}
-                style={{ ...inputStyle, marginBottom: 16 }}
-              >
-                <option value="">-- Select outlet --</option>
-                {shopLocations.map(l => (
-                  <option key={l._id} value={l._id}>{l.name}</option>
-                ))}
-              </select>
-            </>
-          )}
-
-          <button
-            onClick={handleConfirm}
-            disabled={loading || (action === 'dispatch' && !toLocationId)}
-            style={{
-              ...actionBtn('#22c55e'),
-              opacity: (loading || (action === 'dispatch' && !toLocationId)) ? 0.6 : 1
-            }}
-          >
-            {loading ? 'Processing...' : 'Confirm ✓'}
+          <button onClick={() => window.print()} style={{
+            ...actionBtn('#c17f3a'), marginBottom: 8
+          }}>
+            🖨 Print Invoice
           </button>
 
-          <button onClick={() => setStep('action')} style={{
-            marginTop: 10, color: '#475569', background: 'none',
-            border: 'none', cursor: 'pointer', fontSize: 14, display: 'block'
+          <button onClick={reset} style={{
+            width: '100%', padding: '13px', background: '#f5f5f0', color: '#666',
+            border: '1px solid #e8e8e0', borderRadius: 4, fontSize: 11,
+            fontWeight: 700, cursor: 'pointer', letterSpacing: 1,
+            fontFamily: 'Georgia, serif'
           }}>
-            ← Go back
+            Scan Next Unit
           </button>
         </div>
       )}
 
-      {/* STEP 4 — Done */}
+      {/* STEP 3 — Done (for non-sell actions) */}
       {step === 'done' && (
         <div style={{ textAlign: 'center', padding: '40px 0' }}>
           <div style={{ fontSize: 64, marginBottom: 16 }}>✅</div>
-          <p style={{ color: '#22c55e', fontSize: 18, fontWeight: 600, marginBottom: 24 }}>
+          <p style={{ color: '#1a4a2e', fontSize: 18, fontWeight: 700, marginBottom: 24 }}>
             {message}
           </p>
-          <button onClick={reset} style={actionBtn('#22c55e')}>
-            Scan Another Product
+          <button onClick={reset} style={actionBtn('#1a4a2e')}>
+            Scan Next Unit
           </button>
         </div>
       )}
@@ -304,16 +400,27 @@ export default function ScanPage() {
 
 const cardStyle = {
   background: '#ffffff', border: '1px solid #e8e8e0',
-  borderRadius: 4, padding: '16px', marginBottom: 20,
-  boxShadow: '0 1px 4px rgba(26,74,46,0.06)'
+  borderRadius: 4, padding: '14px 16px', marginBottom: 20,
+  boxShadow: '0 1px 4px rgba(26,74,46,0.05)'
 };
 const actionBtn = (color) => ({
   width: '100%', padding: '14px', background: color, color: '#fff',
   border: 'none', borderRadius: 4, fontSize: 13, fontWeight: 700,
-  cursor: 'pointer', letterSpacing: 1.5, fontFamily: 'Georgia, serif'
+  cursor: 'pointer', letterSpacing: 1, fontFamily: 'Georgia, serif'
 });
 const inputStyle = {
-  width: '100%', padding: '12px 14px', background: '#fafaf7',
+  width: '100%', padding: '11px 14px', background: '#fafaf7',
   border: '1px solid #d4d4c8', borderRadius: 4, color: '#1a1a1a',
-  fontSize: 15, outline: 'none', boxSizing: 'border-box'
+  fontSize: 14, outline: 'none', boxSizing: 'border-box', fontFamily: 'Georgia, serif'
+};
+const labelStyle = {
+  color: '#888', fontSize: 10, letterSpacing: 1.5,
+  display: 'block', marginBottom: 8, fontWeight: 700
+};
+const invoiceLabelStyle = {
+  color: '#888', fontSize: 10, letterSpacing: 1.5,
+  margin: '0 0 4px', fontWeight: 700
+};
+const invoiceValueStyle = {
+  color: '#1a1a1a', fontSize: 14, margin: 0, fontWeight: 600
 };
