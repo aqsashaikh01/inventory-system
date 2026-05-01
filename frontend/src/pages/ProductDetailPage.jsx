@@ -179,14 +179,14 @@ const [genLoading, setGenLoading] = useState(false);
           )}
 
           {/* QR Code preview below image */}
-          <button onClick={handleViewQR} style={{
-            display: 'block', width: '100%', marginTop: 10,
+           <button onClick={() => setShowGenerateQR(true)} style={{
+              display: 'block', width: '100%', marginTop: 10,
             padding: '10px', background: '#fff', color: '#1a4a2e',
             border: '1.5px solid #1a4a2e', borderRadius: 4,
             fontSize: 11, fontWeight: 700, letterSpacing: 1.5, cursor: 'pointer'
-          }}>
-            VIEW QR CODE
-          </button>
+            }}>
+              GENERATE UNIT QR CODES
+            </button>
         </div>
 
         {/* RIGHT — Details */}
@@ -282,14 +282,7 @@ const [genLoading, setGenLoading] = useState(false);
     }}>
       EDIT PRODUCT
     </button>
-    <button onClick={() => setShowGenerateQR(true)} style={{
-  width: '100%', marginTop: 8, padding: '13px',
-  background: '#fff', color: '#c17f3a',
-  border: '1.5px solid #c17f3a', borderRadius: 4,
-  fontSize: 11, fontWeight: 700, letterSpacing: 2, cursor: 'pointer'
-}}>
-  GENERATE UNIT QR CODES
-</button>
+   
     <button onClick={handleDelete} style={{
       width: '100%', padding: '13px',
       background: '#fff', color: '#991b1b',

@@ -7,9 +7,9 @@ export default function Navbar() {
 
   const navItem = (to, label) => (
     <Link to={to} style={{
-      color: loc.pathname === to ? '#1a4a2e' : '#888',
-      textDecoration: 'none', fontSize: 11, fontWeight: 700,
-      letterSpacing: 1.5, borderBottom: loc.pathname === to ? '2px solid #c17f3a' : '2px solid transparent',
+      color: loc.pathname === to ? '#1a4a2e' : '#2a2a2a',
+      textDecoration: 'none', fontSize: 13, fontWeight: 500,
+      letterSpacing: 1.7, borderBottom: loc.pathname === to ? '2px solid #c17f3a' : '2px solid transparent',
       paddingBottom: 4
     }}>{label}</Link>
   );
