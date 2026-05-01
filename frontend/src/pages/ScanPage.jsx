@@ -130,106 +130,103 @@ export default function ScanPage() {
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { font-family: 'Georgia', serif; color: #1a1a1a; background: #fff; }
-          
-          .page { width: 794px; min-height: 1123px; margin: 0 auto; padding: 60px; position: relative; }
-          
+          .page { width: 794px; min-height: 1123px; margin: 0 auto; padding: 60px 60px 80px; }
+
+          /* Top bar — hidden when printing */
+          .top-bar { background: #1a4a2e; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; }
+          @media print { .top-bar { display: none !important; } }
+
           /* Header */
-          .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 48px; padding-bottom: 32px; border-bottom: 2px solid #1a4a2e; }
-          .company-name { font-size: 22px; font-weight: 700; color: #1a4a2e; letter-spacing: 1px; margin-bottom: 4px; }
-          .company-sub { font-size: 11px; color: #c17f3a; letter-spacing: 2px; margin-bottom: 12px; }
-          .company-details { font-size: 11px; color: #666; line-height: 1.8; }
+          .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; padding-bottom: 24px; border-bottom: 1px solid #1a1a1a; }
+          .logo { height: 70px; width: auto; margin-bottom: 10px; display: block; }
+          .company-name { font-size: 15px; font-weight: 700; color: #1a1a1a; letter-spacing: 0.5px; margin-bottom: 2px; }
+          .company-details { font-size: 11px; color: #444; line-height: 1.9; margin-top: 6px; }
           .invoice-label { text-align: right; }
-          .invoice-title { font-size: 32px; font-weight: 700; color: #1a4a2e; letter-spacing: 3px; margin-bottom: 8px; }
-          .invoice-number { font-size: 13px; color: #666; margin-bottom: 4px; }
-          .invoice-date { font-size: 13px; color: #666; }
-          
+          .invoice-title { font-size: 36px; font-weight: 700; color: #1a1a1a; letter-spacing: 4px; margin-bottom: 10px; }
+          .invoice-meta { font-size: 12px; color: #444; line-height: 2; }
+          .invoice-meta span { font-weight: 700; color: #1a1a1a; }
+
           /* Bill To */
-          .bill-section { display: flex; justify-content: space-between; margin-bottom: 48px; }
-          .bill-to { flex: 1; }
-          .bill-to-label { font-size: 10px; letter-spacing: 2px; color: #c17f3a; font-weight: 700; margin-bottom: 10px; }
-          .bill-to-name { font-size: 16px; font-weight: 700; color: #1a4a2e; margin-bottom: 4px; }
-          .bill-to-phone { font-size: 13px; color: #666; }
-          .payment-box { background: #f5f5f0; border-left: 3px solid #c17f3a; padding: 16px 20px; }
-          .payment-label { font-size: 10px; letter-spacing: 2px; color: #888; font-weight: 700; margin-bottom: 6px; }
-          .payment-value { font-size: 14px; font-weight: 700; color: #1a4a2e; text-transform: uppercase; }
-          
+          .bill-section { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; }
+          .bill-label { font-size: 10px; letter-spacing: 2px; color: #888; font-weight: 700; margin-bottom: 8px; }
+          .bill-name { font-size: 16px; font-weight: 700; color: #1a1a1a; margin-bottom: 4px; }
+          .bill-phone { font-size: 13px; color: #444; }
+          .payment-box { border: 1px solid #1a1a1a; padding: 14px 20px; text-align: right; min-width: 160px; }
+          .payment-box .bill-label { text-align: right; }
+          .payment-value { font-size: 15px; font-weight: 700; color: #1a1a1a; text-transform: uppercase; letter-spacing: 1px; }
+
           /* Table */
-          .table { width: 100%; border-collapse: collapse; margin-bottom: 32px; }
-          .table thead tr { background: #1a4a2e; }
-          .table thead th { padding: 14px 16px; text-align: left; font-size: 10px; letter-spacing: 2px; color: #fff; font-weight: 700; }
+          .table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
+          .table thead tr { border-top: 1px solid #1a1a1a; border-bottom: 1px solid #1a1a1a; }
+          .table thead th { padding: 12px 14px; text-align: left; font-size: 10px; letter-spacing: 2px; color: #1a1a1a; font-weight: 700; }
           .table thead th:last-child { text-align: right; }
-          .table tbody tr { border-bottom: 1px solid #e8e8e0; }
-          .table tbody tr:last-child { border-bottom: none; }
-          .table tbody td { padding: 18px 16px; font-size: 13px; color: #1a1a1a; vertical-align: top; }
-          .table tbody td:last-child { text-align: right; font-weight: 700; color: #1a4a2e; }
-          .product-name { font-weight: 700; color: #1a4a2e; margin-bottom: 4px; font-size: 14px; }
-          .product-unit { font-size: 11px; color: #888; letter-spacing: 0.5px; }
-          
+          .table tbody tr { border-bottom: 1px solid #e0e0e0; }
+          .table tbody td { padding: 20px 14px; font-size: 13px; color: #1a1a1a; vertical-align: top; }
+          .table tbody td:last-child { text-align: right; font-weight: 700; }
+          .product-name { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+          .product-sub { font-size: 11px; color: #888; }
+
           /* Totals */
-          .totals { display: flex; justify-content: flex-end; margin-bottom: 48px; }
+          .totals-wrapper { display: flex; justify-content: flex-end; margin-top: 0; border-top: none; }
           .totals-box { width: 280px; }
-          .total-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e8e8e0; font-size: 13px; }
-          .total-row:last-child { border-bottom: none; border-top: 2px solid #1a4a2e; margin-top: 4px; padding-top: 14px; }
-          .total-row:last-child span { font-size: 16px; font-weight: 700; color: #1a4a2e; }
-          .total-label { color: #666; }
-          .total-value { font-weight: 600; color: #1a1a1a; }
-          
+          .total-row { display: flex; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid #e0e0e0; font-size: 13px; }
+          .total-row.final { border-bottom: none; border-top: 1px solid #1a1a1a; padding-top: 14px; margin-top: 2px; }
+          .total-row.final span { font-size: 15px; font-weight: 700; }
+          .total-label { color: #444; }
+
           /* Footer */
-          .footer { position: absolute; bottom: 60px; left: 60px; right: 60px; }
-          .footer-divider { height: 1px; background: #e8e8e0; margin-bottom: 20px; }
-          .footer-content { display: flex; justify-content: space-between; align-items: flex-end; }
-          .thank-you { font-size: 13px; color: #666; font-style: italic; }
-          .sold-by { text-align: right; font-size: 11px; color: #888; line-height: 1.8; }
-          .accent-bar { height: 4px; background: linear-gradient(to right, #1a4a2e, #c17f3a); margin-bottom: 0; border-radius: 2px; }
-          
-          @media print {
-            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .page { padding: 40px; }
-            .no-print { display: none; }
-          }
+          .footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid #1a1a1a; display: flex; justify-content: space-between; align-items: flex-end; }
+          .thank-you { font-size: 13px; color: #888; font-style: italic; }
+          .sold-by-block { text-align: right; font-size: 11px; color: #888; line-height: 1.9; }
+          .sold-by-block strong { color: #1a1a1a; font-size: 12px; }
         </style>
       </head>
       <body>
-        <!-- Print button — hidden when printing -->
-        <div class="no-print" style="background:#1a4a2e;padding:12px 24px;display:flex;justify-content:space-between;align-items:center;">
-          <span style="color:#fff;font-family:Georgia,serif;font-size:13px;letter-spacing:1px;">RDE INVOICE — ${invoice.invoiceNumber}</span>
-          <div style="display:flex;gap:12px;">
-            <button onclick="window.print()" style="background:#c17f3a;color:#fff;border:none;padding:8px 20px;font-family:Georgia,serif;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;border-radius:2px;">🖨 PRINT / SAVE PDF</button>
-            <button onclick="window.close()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.3);padding:8px 20px;font-family:Georgia,serif;font-size:12px;cursor:pointer;border-radius:2px;">CLOSE</button>
+        <!-- Top bar — hidden on print -->
+        <div class="top-bar">
+          <span style="color:#fff;font-family:Georgia,serif;font-size:13px;letter-spacing:1px;">
+            Invoice — ${invoice.invoiceNumber}
+          </span>
+          <div style="display:flex;gap:10px;">
+            <button onclick="window.print()" style="background:#c17f3a;color:#fff;border:none;padding:8px 20px;font-family:Georgia,serif;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;">
+              🖨 PRINT / SAVE PDF
+            </button>
+            <button onclick="window.close()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.4);padding:8px 20px;font-family:Georgia,serif;font-size:12px;cursor:pointer;">
+              CLOSE
+            </button>
           </div>
         </div>
 
         <div class="page">
-          <!-- Accent bar top -->
-          <div class="accent-bar" style="margin-bottom:40px;"></div>
-          
+
           <!-- Header -->
           <div class="header">
             <div>
+              <img src="${window.location.origin}/logo.png" class="logo" alt="RDE Logo" />
               <div class="company-name">RELIABLE DAIRY EQUIPMENTS</div>
-              <div class="company-sub">PUNE, MAHARASHTRA</div>
               <div class="company-details">
-                Factory & Showroom, Pune<br>
-                contact@rdepune.com<br>
-                +91 XXXXXXXXXX
+                Factory & Showroom, Pune, Maharashtra<br>
+                contact@rdepune.com &nbsp;·&nbsp; +91 XXXXXXXXXX
               </div>
             </div>
             <div class="invoice-label">
               <div class="invoice-title">INVOICE</div>
-              <div class="invoice-number"># ${invoice.invoiceNumber}</div>
-              <div class="invoice-date">${new Date(invoice.soldAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+              <div class="invoice-meta">
+                Invoice No: <span>${invoice.invoiceNumber}</span><br>
+                Date: <span>${new Date(invoice.soldAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+              </div>
             </div>
           </div>
 
-          <!-- Bill To -->
+          <!-- Bill To + Payment -->
           <div class="bill-section">
-            <div class="bill-to">
-              <div class="bill-to-label">BILL TO</div>
-              <div class="bill-to-name">${invoice.clientName || 'Walk-in Customer'}</div>
-              ${invoice.clientPhone ? `<div class="bill-to-phone">+91 ${invoice.clientPhone}</div>` : ''}
+            <div>
+              <div class="bill-label">BILL TO</div>
+              <div class="bill-name">${invoice.clientName || 'Walk-in Customer'}</div>
+              ${invoice.clientPhone ? `<div class="bill-phone">+91 ${invoice.clientPhone}</div>` : ''}
             </div>
             <div class="payment-box">
-              <div class="payment-label">PAYMENT METHOD</div>
+              <div class="bill-label">PAYMENT METHOD</div>
               <div class="payment-value">${invoice.paymentMethod || 'Cash'}</div>
             </div>
           </div>
@@ -249,9 +246,9 @@ export default function ScanPage() {
               <tr>
                 <td>
                   <div class="product-name">${invoice.productName}</div>
-                  <div class="product-unit">Dairy Equipment</div>
+                  <div class="product-sub">Dairy Equipment</div>
                 </td>
-                <td style="font-size:11px;color:#888;letter-spacing:0.5px;">${invoice.unitCode}</td>
+                <td style="font-size:11px;color:#888;">${invoice.unitCode}</td>
                 <td>1</td>
                 <td>₹${Number(invoice.sellingPrice).toLocaleString('en-IN')}</td>
                 <td>₹${Number(invoice.sellingPrice).toLocaleString('en-IN')}</td>
@@ -260,17 +257,17 @@ export default function ScanPage() {
           </table>
 
           <!-- Totals -->
-          <div class="totals">
+          <div class="totals-wrapper">
             <div class="totals-box">
               <div class="total-row">
                 <span class="total-label">Subtotal</span>
-                <span class="total-value">₹${Number(invoice.sellingPrice).toLocaleString('en-IN')}</span>
+                <span>₹${Number(invoice.sellingPrice).toLocaleString('en-IN')}</span>
               </div>
               <div class="total-row">
                 <span class="total-label">Tax (GST)</span>
-                <span class="total-value">Inclusive</span>
+                <span>Inclusive</span>
               </div>
-              <div class="total-row">
+              <div class="total-row final">
                 <span>TOTAL</span>
                 <span>₹${Number(invoice.sellingPrice).toLocaleString('en-IN')}</span>
               </div>
@@ -279,19 +276,14 @@ export default function ScanPage() {
 
           <!-- Footer -->
           <div class="footer">
-            <div class="footer-divider"></div>
-            <div class="footer-content">
-              <div class="thank-you">Thank you for your business!</div>
-              <div class="sold-by">
-                Sold by: ${invoice.soldBy}<br>
-                ${invoice.location}<br>
-                ${new Date(invoice.soldAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-              </div>
+            <div class="thank-you">Thank you for your business.</div>
+            <div class="sold-by-block">
+              <strong>${invoice.soldBy}</strong><br>
+              ${invoice.location}<br>
+              ${new Date(invoice.soldAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
             </div>
           </div>
 
-          <!-- Bottom accent -->
-          <div style="position:absolute;bottom:0;left:0;right:0;height:4px;background:linear-gradient(to right,#1a4a2e,#c17f3a);"></div>
         </div>
       </body>
       </html>

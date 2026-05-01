@@ -1,10 +1,8 @@
 const router = require('express').Router();
-const Sale = require('../models/Sale');
-const Inventory = require('../models/Inventory');
-const Movement = require('../models/Movement');
+const Unit = require('../models/Unit');
 const protect = require('../middleware/auth');
 
-// GET /api/dashboard/daily  — today's sales per outlet
+// GET /api/dashboard/daily — today's sales from units
 router.get('/daily', protect('admin'), async (req, res) => {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
@@ -12,19 +10,24 @@ router.get('/daily', protect('admin'), async (req, res) => {
   end.setHours(23, 59, 59, 999);
 
   try {
-    const sales = await Sale.find({ createdAt: { $gte: start, $lte: end } })
-      .populate('product', 'name category')
-      .populate('location', 'name')
-      .populate('soldBy', 'name');
+    const soldUnits = await Unit.find({
+      status: 'sold',
+      soldAt: { $gte: start, $lte: end }
+    })
+      .populate('product', 'name category sellingPrice sku')
+      .populate('currentLocation', 'name')
+      .populate('scannedBy', 'name');
 
     // Group by location
     const byLocation = {};
-    sales.forEach(s => {
-      const locName = s.location.name;
-      if (!byLocation[locName]) byLocation[locName] = { sales: [], totalUnits: 0, totalRevenue: 0 };
-      byLocation[locName].sales.push(s);
-      byLocation[locName].totalUnits += s.quantity;
-      byLocation[locName].totalRevenue += s.quantity * s.sellingPrice;
+    soldUnits.forEach(u => {
+      const locName = u.currentLocation?.name || 'Unknown';
+      if (!byLocation[locName]) {
+        byLocation[locName] = { sales: [], totalUnits: 0, totalRevenue: 0 };
+      }
+      byLocation[locName].sales.push(u);
+      byLocation[locName].totalUnits += 1;
+      byLocation[locName].totalRevenue += u.product?.sellingPrice || 0;
     });
 
     res.json({ date: start.toDateString(), byLocation });
@@ -33,29 +36,48 @@ router.get('/daily', protect('admin'), async (req, res) => {
   }
 });
 
-// GET /api/dashboard/inventory  — current stock at all locations
+// GET /api/dashboard/inventory — current stock from units
 router.get('/inventory', protect('admin'), async (req, res) => {
   try {
-    const inventory = await Inventory.find({ quantity: { $gt: 0 } })
-      .populate('product', 'name category sku')
-      .populate('location', 'name type');
-    res.json(inventory);
+    // Get all units that are in_factory or in_shop, grouped by product + location
+    const units = await Unit.find({
+      status: { $in: ['in_factory', 'in_shop'] }
+    })
+      .populate('product', 'name category sku sellingPrice')
+      .populate('currentLocation', 'name type');
+
+    // Group by product + location
+    const grouped = {};
+    units.forEach(u => {
+      const key = `${u.product?._id}_${u.currentLocation?._id}`;
+      if (!grouped[key]) {
+        grouped[key] = {
+          product: u.product,
+          location: u.currentLocation,
+          quantity: 0
+        };
+      }
+      grouped[key].quantity += 1;
+    });
+
+    res.json(Object.values(grouped));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// GET /api/dashboard/movements  — recent scan activity
+// GET /api/dashboard/movements — recent unit scan activity
 router.get('/movements', protect('admin'), async (req, res) => {
   try {
-    const movements = await Movement.find()
-      .sort({ createdAt: -1 })
+    const units = await Unit.find()
+      .sort({ updatedAt: -1 })
       .limit(50)
       .populate('product', 'name sku')
-      .populate('fromLocation', 'name')
-      .populate('toLocation', 'name')
+      .populate('currentLocation', 'name')
+      .populate('dispatchedTo', 'name')
       .populate('scannedBy', 'name role');
-    res.json(movements);
+
+    res.json(units);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
