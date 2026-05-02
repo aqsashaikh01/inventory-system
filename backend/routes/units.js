@@ -54,7 +54,7 @@ router.post('/generate', protect('admin'), async (req, res) => {
       ctx.fillStyle = '#1a4a2e';
       ctx.font = 'bold 16px Arial';
       ctx.textAlign = 'center';
-      ctx.fillText(`Rs. ${Number(product.sellingPrice).toLocaleString('en-IN')}`, 150, 340);
+      ctx.fillText(`MRP. ${Number(product.sellingPrice).toLocaleString('en-IN')}`, 150, 340);
 
       // Convert canvas to PNG buffer
       const buffer = canvas.toBuffer('image/png');

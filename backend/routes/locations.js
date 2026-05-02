@@ -8,12 +8,32 @@ router.get('/', async (req, res) => {
   res.json(locations);
 });
 
-// POST create location (admin only)
+// POST create location
 router.post('/', async (req, res) => {
   const { name, type, address } = req.body;
   try {
     const location = await Location.create({ name, type, address });
     res.status(201).json(location);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT update location
+router.put('/:id', protect('admin'), async (req, res) => {
+  try {
+    const location = await Location.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(location);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE location
+router.delete('/:id', protect('admin'), async (req, res) => {
+  try {
+    await Location.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

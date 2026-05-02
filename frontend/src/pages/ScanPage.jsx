@@ -4,6 +4,29 @@ import { useAuth } from '../context/AuthContext';
 import QRScanner from '../components/QRScanner';
 import api from '../utils/api';
 
+const G = {
+  green: '#1B6B45',
+  greenLight: '#E8F5EE',
+  greenBorder: '#BBF7D0',
+  greenText: '#166534',
+  orange: '#C17F3A',
+  orangeLight: '#FFF7ED',
+  orangeBorder: '#FED7AA',
+  orangeText: '#9A3412',
+  bg: '#F5F5F2',
+  surface: '#FFFFFF',
+  surfaceSecondary: '#EFEFEB',
+  border: 'rgba(0,0,0,0.08)',
+  borderSoft: 'rgba(0,0,0,0.05)',
+  textPrimary: '#111110',
+  textSecondary: '#6B6B68',
+  textTertiary: '#9A9A96',
+  red: '#991B1B',
+  redLight: '#FEF2F2',
+  redBorder: '#FECACA',
+  whatsapp: '#1B6B45',
+};
+
 export default function ScanPage() {
   const { user } = useAuth();
   const { sku: urlCode } = useParams();
@@ -18,7 +41,6 @@ export default function ScanPage() {
   const [loading, setLoading] = useState(false);
   const [invoice, setInvoice] = useState(null);
 
-  // Sell form fields
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
@@ -43,7 +65,7 @@ export default function ScanPage() {
 
       if (availableAction === 'stock_in') {
         await api.post(`/units/stock-in/${unit.unitCode}`);
-        setMessage(`✅ ${unit.unitCode} added to factory inventory`);
+        setMessage(`${unit.unitCode} added to factory inventory`);
         setStep('done');
         return;
       }
@@ -63,13 +85,13 @@ export default function ScanPage() {
 
   const getStatusMessage = (status) => {
     const messages = {
-      in_factory: '⚠️ Already in factory inventory',
-      dispatched: '⚠️ Already dispatched to a shop',
-      in_shop: '⚠️ Already in shop inventory',
-      sold: '❌ This unit has already been sold',
-      generated: '⚠️ Not yet processed'
+      in_factory: 'Already in factory inventory',
+      dispatched: 'Already dispatched to a shop',
+      in_shop: 'Already in shop inventory',
+      sold: 'This unit has already been sold',
+      generated: 'Not yet processed',
     };
-    return messages[status] || '❌ Cannot process this unit';
+    return messages[status] || 'Cannot process this unit';
   };
 
   const handleConfirm = async () => {
@@ -79,15 +101,15 @@ export default function ScanPage() {
       if (action === 'dispatch') {
         await api.post(`/units/dispatch/${unitCode}`, { toLocationId });
         const shop = shopLocations.find(l => l._id === toLocationId);
-        setMessage(`✅ ${unitCode} dispatched to ${shop?.name}`);
+        setMessage(`${unitCode} dispatched to ${shop?.name}`);
         setStep('done');
       } else if (action === 'receive') {
         await api.post(`/units/receive/${unitCode}`);
-        setMessage(`✅ ${unitCode} received into shop inventory`);
+        setMessage(`${unitCode} received into shop inventory`);
         setStep('done');
       } else if (action === 'sell') {
         const res = await api.post(`/units/sell/${unitCode}`, {
-          clientName, clientPhone, paymentMethod
+          clientName, clientPhone, paymentMethod,
         });
         setInvoice(res.data.invoice);
         setStep('invoice');
@@ -121,483 +143,737 @@ export default function ScanPage() {
   };
 
   const generateInvoice = () => {
-    const invoiceHTML = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <title>Invoice ${invoice.invoiceNumber}</title>
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'Georgia', serif; color: #1a1a1a; background: #fff; }
-          .page { width: 794px; min-height: 1123px; margin: 0 auto; padding: 60px 60px 80px; }
+  const invoiceHTML = `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="UTF-8">
+    <title>INVOICE ${invoice.invoiceNumber}</title>
 
-          /* Top bar — hidden when printing */
-          .top-bar { background: #1a4a2e; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; }
-          @media print { .top-bar { display: none !important; } }
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 
-          /* Header */
-          .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; padding-bottom: 24px; border-bottom: 1px solid #1a1a1a; }
-          .logo { height: 70px; width: auto; margin-bottom: 10px; display: block; }
-          .company-name { font-size: 15px; font-weight: 700; color: #1a1a1a; letter-spacing: 0.5px; margin-bottom: 2px; }
-          .company-details { font-size: 11px; color: #444; line-height: 1.9; margin-top: 6px; }
-          .invoice-label { text-align: right; }
-          .invoice-title { font-size: 36px; font-weight: 700; color: #1a1a1a; letter-spacing: 4px; margin-bottom: 10px; }
-          .invoice-meta { font-size: 12px; color: #444; line-height: 2; }
-          .invoice-meta span { font-weight: 700; color: #1a1a1a; }
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
 
-          /* Bill To */
-          .bill-section { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; }
-          .bill-label { font-size: 10px; letter-spacing: 2px; color: #888; font-weight: 700; margin-bottom: 8px; }
-          .bill-name { font-size: 16px; font-weight: 700; color: #1a1a1a; margin-bottom: 4px; }
-          .bill-phone { font-size: 13px; color: #444; }
-          .payment-box { border: 1px solid #1a1a1a; padding: 14px 20px; text-align: right; min-width: 160px; }
-          .payment-box .bill-label { text-align: right; }
-          .payment-value { font-size: 15px; font-weight: 700; color: #1a1a1a; text-transform: uppercase; letter-spacing: 1px; }
+      body {
+        font-family: 'Inter', sans-serif;
+        background: #f3f4f6;
+        color: #111827;
+      }
 
-          /* Table */
-          .table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
-          .table thead tr { border-top: 1px solid #1a1a1a; border-bottom: 1px solid #1a1a1a; }
-          .table thead th { padding: 12px 14px; text-align: left; font-size: 10px; letter-spacing: 2px; color: #1a1a1a; font-weight: 700; }
-          .table thead th:last-child { text-align: right; }
-          .table tbody tr { border-bottom: 1px solid #e0e0e0; }
-          .table tbody td { padding: 20px 14px; font-size: 13px; color: #1a1a1a; vertical-align: top; }
-          .table tbody td:last-child { text-align: right; font-weight: 700; }
-          .product-name { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
-          .product-sub { font-size: 11px; color: #888; }
+      .page {
+        width: 794px;
+        min-height: 1123px;
+        margin: 0 auto;
+        background: #ffffff;
+        padding: 56px;
+      }
 
-          /* Totals */
-          .totals-wrapper { display: flex; justify-content: flex-end; margin-top: 0; border-top: none; }
-          .totals-box { width: 280px; }
-          .total-row { display: flex; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid #e0e0e0; font-size: 13px; }
-          .total-row.final { border-bottom: none; border-top: 1px solid #1a1a1a; padding-top: 14px; margin-top: 2px; }
-          .total-row.final span { font-size: 15px; font-weight: 700; }
-          .total-label { color: #444; }
+      .top-bar {
+        background: #111827;
+        padding: 10px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
 
-          /* Footer */
-          .footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid #1a1a1a; display: flex; justify-content: space-between; align-items: flex-end; }
-          .thank-you { font-size: 13px; color: #888; font-style: italic; }
-          .sold-by-block { text-align: right; font-size: 11px; color: #888; line-height: 1.9; }
-          .sold-by-block strong { color: #1a1a1a; font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <!-- Top bar — hidden on print -->
-        <div class="top-bar">
-          <span style="color:#fff;font-family:Georgia,serif;font-size:13px;letter-spacing:1px;">
-            Invoice — ${invoice.invoiceNumber}
-          </span>
-          <div style="display:flex;gap:10px;">
-            <button onclick="window.print()" style="background:#c17f3a;color:#fff;border:none;padding:8px 20px;font-family:Georgia,serif;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;">
-              🖨 PRINT / SAVE PDF
-            </button>
-            <button onclick="window.close()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.4);padding:8px 20px;font-family:Georgia,serif;font-size:12px;cursor:pointer;">
-              CLOSE
-            </button>
+      @media print {
+        .top-bar { display: none !important; }
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 48px;
+      }
+
+      /* 🔥 Bigger but clean logo */
+      .logo {
+        height: 75px;
+        margin-bottom: 14px;
+        object-fit: contain;
+      }
+
+      .company-name {
+        font-size: 15px;
+        font-weight: 600;
+      }
+
+      .company-details {
+        font-size: 13px;
+        color: #6b7280;
+        margin-top: 4px;
+        line-height: 1.5;
+      }
+
+      .invoice-title {
+        font-size: 26px;
+        font-weight: 600;
+        text-align: right;
+        margin-bottom: 8px;
+      }
+
+      .invoice-meta {
+        font-size: 13px;
+        color: #6b7280;
+        text-align: right;
+        line-height: 1.6;
+      }
+
+      .invoice-meta span {
+        font-weight: 500;
+        color: #111827;
+      }
+
+      .bill-section {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 36px;
+      }
+
+      .bill-label {
+        font-size: 11px;
+        color: #9ca3af;
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .bill-name {
+        font-size: 15px;
+        font-weight: 600;
+      }
+
+      .bill-phone {
+        font-size: 13px;
+        color: #6b7280;
+        margin-top: 2px;
+      }
+
+      .payment-box {
+        text-align: right;
+      }
+
+      .payment-value {
+        font-size: 14px;
+        font-weight: 500;
+        margin-top: 4px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      thead {
+        background: #f9fafb;
+      }
+
+      thead th {
+        text-align: left;
+        padding: 12px;
+        font-size: 12px;
+        font-weight: 500;
+        color: #6b7280;
+      }
+
+      tbody td {
+        padding: 14px 12px;
+        font-size: 14px;
+        border-bottom: 1px solid #e5e7eb;
+      }
+
+      tbody td:last-child {
+        text-align: right;
+        font-weight: 500;
+      }
+
+      .product-name {
+        font-weight: 500;
+      }
+
+      .product-sub {
+        font-size: 12px;
+        color: #9ca3af;
+        margin-top: 2px;
+      }
+
+      .totals {
+        margin-top: 28px;
+        display: flex;
+        justify-content: flex-end;
+      }
+
+      .totals-box {
+        width: 260px;
+      }
+
+      .row {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        font-size: 14px;
+      }
+
+      .row.total {
+        border-top: 1.5px solid #111827;
+        margin-top: 8px;
+        padding-top: 10px;
+        font-weight: 600;
+        font-size: 15px;
+      }
+
+      .footer {
+        margin-top: 60px;
+        font-size: 13px;
+        color: #6b7280;
+        display: flex;
+        justify-content: space-between;
+      }
+
+      .btn {
+        padding: 7px 14px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+      }
+
+    </style>
+  </head>
+
+  <body>
+
+    <div class="top-bar">
+      <span style="color:#fff;font-size:13px;">Invoice — ${invoice.invoiceNumber}</span>
+      <div>
+        <button onclick="window.print()" class="btn" style="background:#2563eb;color:#fff;border:none;">Print</button>
+        <button onclick="window.close()" class="btn" style="margin-left:8px;background:transparent;color:#fff;border:1px solid #6b7280;">Close</button>
+      </div>
+    </div>
+
+    <div class="page">
+
+      <div class="header">
+        <div>
+          <img src="${window.location.origin}/logo.png" class="logo" />
+          <div class="company-name">Reliable Dairy Equipments</div>
+          <div class="company-details">
+            Pune, Maharashtra<br>
+            reliablepnq@gmail.com · +91 9175857346
           </div>
         </div>
 
-        <div class="page">
-
-          <!-- Header -->
-          <div class="header">
-            <div>
-              <img src="${window.location.origin}/logo.png" class="logo" alt="RDE Logo" />
-              <div class="company-name">RELIABLE DAIRY EQUIPMENTS</div>
-              <div class="company-details">
-                Factory & Showroom, Pune, Maharashtra<br>
-                contact@rdepune.com &nbsp;·&nbsp; +91 XXXXXXXXXX
-              </div>
-            </div>
-            <div class="invoice-label">
-              <div class="invoice-title">INVOICE</div>
-              <div class="invoice-meta">
-                Invoice No: <span>${invoice.invoiceNumber}</span><br>
-                Date: <span>${new Date(invoice.soldAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-              </div>
-            </div>
+        <div>
+          <div class="invoice-title">INVOICE</div>
+          <div class="invoice-meta">
+            No: <span>${invoice.invoiceNumber}</span><br>
+            Date: <span>${new Date(invoice.soldAt).toLocaleDateString('en-IN')}</span>
           </div>
-
-          <!-- Bill To + Payment -->
-          <div class="bill-section">
-            <div>
-              <div class="bill-label">BILL TO</div>
-              <div class="bill-name">${invoice.clientName || 'Walk-in Customer'}</div>
-              ${invoice.clientPhone ? `<div class="bill-phone">+91 ${invoice.clientPhone}</div>` : ''}
-            </div>
-            <div class="payment-box">
-              <div class="bill-label">PAYMENT METHOD</div>
-              <div class="payment-value">${invoice.paymentMethod || 'Cash'}</div>
-            </div>
-          </div>
-
-          <!-- Table -->
-          <table class="table">
-            <thead>
-              <tr>
-                <th>DESCRIPTION</th>
-                <th>UNIT CODE</th>
-                <th>QTY</th>
-                <th>UNIT PRICE</th>
-                <th>AMOUNT</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <div class="product-name">${invoice.productName}</div>
-                  <div class="product-sub">Dairy Equipment</div>
-                </td>
-                <td style="font-size:11px;color:#888;">${invoice.unitCode}</td>
-                <td>1</td>
-                <td>₹${Number(invoice.sellingPrice).toLocaleString('en-IN')}</td>
-                <td>₹${Number(invoice.sellingPrice).toLocaleString('en-IN')}</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <!-- Totals -->
-          <div class="totals-wrapper">
-            <div class="totals-box">
-              <div class="total-row">
-                <span class="total-label">Subtotal</span>
-                <span>₹${Number(invoice.sellingPrice).toLocaleString('en-IN')}</span>
-              </div>
-              <div class="total-row">
-                <span class="total-label">Tax (GST)</span>
-                <span>Inclusive</span>
-              </div>
-              <div class="total-row final">
-                <span>TOTAL</span>
-                <span>₹${Number(invoice.sellingPrice).toLocaleString('en-IN')}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Footer -->
-          <div class="footer">
-            <div class="thank-you">Thank you for your business.</div>
-            <div class="sold-by-block">
-              <strong>${invoice.soldBy}</strong><br>
-              ${invoice.location}<br>
-              ${new Date(invoice.soldAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-            </div>
-          </div>
-
         </div>
-      </body>
-      </html>
-    `;
+      </div>
 
-    const invoiceWindow = window.open('', '_blank');
-    invoiceWindow.document.write(invoiceHTML);
-    invoiceWindow.document.close();
-  };
+      <div class="bill-section">
+        <div>
+          <div class="bill-label">Bill To</div>
+          <div class="bill-name">${invoice.clientName || 'Walk-in Customer'}</div>
+          ${invoice.clientPhone ? `<div class="bill-phone">+91 ${invoice.clientPhone}</div>` : ''}
+        </div>
+
+        <div class="payment-box">
+          <div class="bill-label">Payment</div>
+          <div class="payment-value">${invoice.paymentMethod || 'Cash'}</div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Description</th>
+            <th>Unit</th>
+            <th>Qty</th>
+            <th>Price</th>
+            <th style="text-align:right;">Amount</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <tr>
+            <td>
+              <div class="product-name">${invoice.productName}</div>
+              <div class="product-sub">Dairy Equipment</div>
+            </td>
+            <td>${invoice.unitCode}</td>
+            <td>1</td>
+            <td>₹${Number(invoice.sellingPrice).toLocaleString('en-IN')}</td>
+            <td>₹${Number(invoice.sellingPrice).toLocaleString('en-IN')}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="totals">
+        <div class="totals-box">
+          <div class="row">
+            <span>Subtotal</span>
+            <span>₹${Number(invoice.sellingPrice).toLocaleString('en-IN')}</span>
+          </div>
+
+          <div class="row">
+            <span>GST</span>
+            <span>Included</span>
+          </div>
+
+          <div class="row total">
+            <span>Total</span>
+            <span>₹${Number(invoice.sellingPrice).toLocaleString('en-IN')}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer">
+        <div>Thank you for your business.</div>
+        <div>Authorized Signature</div>
+      </div>
+
+    </div>
+
+  </body>
+  </html>
+  `;
+
+  const invoiceWindow = window.open('', '_blank');
+  invoiceWindow.document.write(invoiceHTML);
+  invoiceWindow.document.close();
+};
 
   const { unit } = unitData || {};
 
   return (
-    <div style={{ maxWidth: 420, margin: '0 auto', padding: 20, fontFamily: 'Georgia, serif' }}>
-      <h2 style={{ color: '#1a4a2e', marginBottom: 4 }}>Scan Unit</h2>
-      <p style={{ color: '#888', fontSize: 13, marginBottom: 24 }}>
-        📍 {user?.location?.name} · {user?.role?.replace('_', ' ')}
-      </p>
+    <div style={{ fontFamily: font, background: G.bg, minHeight: '100vh', padding: '24px 20px' }}>
+      <div style={{ maxWidth: 420, margin: '0 auto' }}>
 
-      {error && (
-        <div style={{
-          background: '#fef2f2', color: '#991b1b', padding: 12,
-          borderRadius: 4, marginBottom: 16, fontSize: 14,
-          border: '1px solid #fecaca',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-        }}>
-          {error}
-          <button onClick={() => { setError(''); setStep('scan'); }} style={{
-            background: 'none', border: 'none', color: '#991b1b',
-            cursor: 'pointer', fontSize: 18
-          }}>×</button>
+        {/* Header */}
+        <div style={{ marginBottom: 24 }}>
+          <h2 style={{ fontSize: 22, fontWeight: 600, color: G.textPrimary, letterSpacing: '-0.3px', margin: '0 0 4px' }}>
+            Scan Unit
+          </h2>
+          <span style={{ fontSize: 13, color: G.textTertiary }}>
+            {user?.location?.name} &nbsp;·&nbsp; {user?.role?.replace('_', ' ')}
+          </span>
         </div>
-      )}
 
-      {/* STEP 1 — Camera */}
-      {step === 'scan' && (
-        <div>
-          <p style={{ color: '#888', marginBottom: 16, fontSize: 14 }}>
-            Point camera at the unit QR sticker
-          </p>
-          <QRScanner onResult={handleScan} />
-          <p style={{ color: '#aaa', fontSize: 12, marginTop: 12, textAlign: 'center' }}>
-            Each sticker has a unique QR code
-          </p>
-        </div>
-      )}
-
-      {/* STEP 2 — Action */}
-      {step === 'action' && unit && (
-        <div>
-          <div style={cardStyle}>
-            <p style={{ color: '#c17f3a', fontSize: 11, letterSpacing: 1, margin: '0 0 4px' }}>
-              SCANNED UNIT
-            </p>
-            <h3 style={{ color: '#1a4a2e', margin: '0 0 4px', fontSize: 18 }}>
-              {unit.product?.name}
-            </h3>
-            <p style={{ color: '#888', fontSize: 12, margin: 0 }}>
-              Unit: {unit.unitCode}
-            </p>
-          </div>
-
-          {/* DISPATCH */}
-          {action === 'dispatch' && (
-            <>
-              <label style={labelStyle}>SELECT SHOP TO DISPATCH TO</label>
-              <select value={toLocationId} onChange={e => setToLocationId(e.target.value)}
-                style={{ ...inputStyle, marginBottom: 16 }}>
-                <option value="">-- Select outlet --</option>
-                {shopLocations.map(l => (
-                  <option key={l._id} value={l._id}>{l.name}</option>
-                ))}
-              </select>
-              <button onClick={handleConfirm} disabled={!toLocationId || loading}
-                style={{ ...actionBtn('#c17f3a'), opacity: !toLocationId ? 0.5 : 1 }}>
-                {loading ? 'Processing...' : '🚚 Confirm Dispatch'}
-              </button>
-            </>
-          )}
-
-          {/* RECEIVE */}
-          {action === 'receive' && (
-            <>
-              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 4, padding: 14, marginBottom: 16 }}>
-                <p style={{ color: '#166534', margin: 0, fontSize: 14 }}>
-                  📦 This unit was dispatched to your shop. Confirm receipt?
-                </p>
-              </div>
-              <button onClick={handleConfirm} disabled={loading} style={actionBtn('#1a4a2e')}>
-                {loading ? 'Processing...' : '📦 Confirm Receive'}
-              </button>
-            </>
-          )}
-
-          {/* SELL */}
-          {action === 'sell' && (
-            <>
-              {/* Product summary */}
-              <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 4, padding: 14, marginBottom: 20 }}>
-                <p style={{ color: '#92400e', margin: '0 0 2px', fontSize: 15, fontWeight: 700 }}>
-                  {unit.product?.name}
-                </p>
-                <p style={{ color: '#92400e', margin: 0, fontSize: 13 }}>
-                  {unit.unitCode} · ₹{Number(unit.product?.sellingPrice).toLocaleString('en-IN')}
-                </p>
-              </div>
-
-              {/* Customer details */}
-              <label style={labelStyle}>CUSTOMER NAME</label>
-              <input
-                placeholder="e.g. Rahul Patil"
-                value={clientName}
-                onChange={e => setClientName(e.target.value)}
-                style={{ ...inputStyle, marginBottom: 14 }}
-              />
-
-              <label style={labelStyle}>WHATSAPP NUMBER</label>
-              <input
-                placeholder="e.g. 9876543210"
-                type="tel"
-                value={clientPhone}
-                onChange={e => setClientPhone(e.target.value)}
-                style={{ ...inputStyle, marginBottom: 14 }}
-              />
-
-              <label style={labelStyle}>PAYMENT METHOD</label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 20 }}>
-                {['cash', 'upi', 'card', 'credit'].map(m => (
-                  <button key={m} onClick={() => setPaymentMethod(m)} style={{
-                    padding: '10px', borderRadius: 4, cursor: 'pointer',
-                    border: paymentMethod === m ? '2px solid #1a4a2e' : '1px solid #d4d4c8',
-                    background: paymentMethod === m ? '#f0fdf4' : '#fafaf7',
-                    color: paymentMethod === m ? '#1a4a2e' : '#666',
-                    fontWeight: paymentMethod === m ? 700 : 400,
-                    fontSize: 12, textTransform: 'uppercase', letterSpacing: 1,
-                    fontFamily: 'Georgia, serif'
-                  }}>
-                    {m === 'cash' ? '💵 Cash' :
-                     m === 'upi' ? '📱 UPI' :
-                     m === 'card' ? '💳 Card' : '📒 Credit'}
-                  </button>
-                ))}
-              </div>
-
-              <button onClick={handleConfirm} disabled={loading} style={actionBtn('#1a4a2e')}>
-                {loading ? 'Processing...' : '💰 Confirm Sale'}
-              </button>
-            </>
-          )}
-
-          <button onClick={reset} style={{
-            marginTop: 12, color: '#888', background: 'none',
-            border: 'none', cursor: 'pointer', fontSize: 13, display: 'block'
-          }}>
-            ← Scan again
-          </button>
-        </div>
-      )}
-
-      {/* STEP 3 — Invoice */}
-      {step === 'invoice' && invoice && (
-        <div>
-          <div style={{ textAlign: 'center', marginBottom: 24 }}>
-            <div style={{ fontSize: 48, marginBottom: 8 }}>✅</div>
-            <h3 style={{ color: '#1a4a2e', margin: 0 }}>Sale Complete</h3>
-          </div>
-
-          {/* Invoice card */}
+        {/* Error banner */}
+        {error && (
           <div style={{
-            background: '#fff', border: '1px solid #e8e8e0',
-            borderRadius: 4, overflow: 'hidden', marginBottom: 16
+            background: G.redLight, color: G.red, padding: '12px 14px',
+            borderRadius: 10, marginBottom: 16, fontSize: 13,
+            border: `0.5px solid ${G.redBorder}`,
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           }}>
-            {/* Invoice header */}
-            <div style={{ background: '#1a4a2e', padding: '16px 20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>{error}</span>
+            <button onClick={() => { setError(''); setStep('scan'); }} style={{
+              background: 'none', border: 'none', color: G.red,
+              cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 0,
+            }}>×</button>
+          </div>
+        )}
+
+        {/* STEP 1 — Camera */}
+        {step === 'scan' && (
+          <div>
+            <div style={sectionLabelStyle}>Point camera at QR sticker</div>
+            <QRScanner onResult={handleScan} />
+            <p style={{ fontSize: 12, color: G.textTertiary, textAlign: 'center', marginTop: 10 }}>
+              Each sticker has a unique QR code
+            </p>
+          </div>
+        )}
+
+        {/* STEP 2 — Action */}
+        {step === 'action' && unit && (
+          <div>
+            {/* Scanned unit card */}
+            <div style={cardStyle}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
-                  <p style={{ color: '#fff', margin: 0, fontWeight: 700, fontSize: 14 }}>
-                    RELIABLE DAIRY EQUIPMENTS
+                  <p style={sectionLabelStyle}>Scanned unit</p>
+                  <p style={{ fontSize: 15, fontWeight: 600, color: G.textPrimary, margin: '0 0 2px' }}>
+                    {unit.product?.name}
                   </p>
-                  <p style={{ color: '#a3c4a8', margin: '2px 0 0', fontSize: 11, letterSpacing: 1 }}>
+                  <p style={{ fontSize: 12, color: G.textSecondary, margin: 0 }}>
+                    {unit.unitCode}
+                  </p>
+                </div>
+                <span style={badge('green')}>{unit.status?.replace('_', ' ')}</span>
+              </div>
+            </div>
+
+            {/* DISPATCH */}
+            {action === 'dispatch' && (
+              <>
+                <p style={sectionLabelStyle}>Select shop to dispatch to</p>
+                <select
+                  value={toLocationId}
+                  onChange={e => setToLocationId(e.target.value)}
+                  style={{ ...selectStyle, marginBottom: 16 }}
+                >
+                  <option value="">— Select outlet —</option>
+                  {shopLocations.map(l => (
+                    <option key={l._id} value={l._id}>{l.name}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleConfirm}
+                  disabled={!toLocationId || loading}
+                  style={{ ...btn(G.orange), opacity: !toLocationId ? 0.45 : 1 }}
+                >
+                  {loading ? 'Processing…' : 'Confirm dispatch'}
+                </button>
+              </>
+            )}
+
+            {/* RECEIVE */}
+            {action === 'receive' && (
+              <>
+                <div style={{
+                  background: G.greenLight, border: `0.5px solid ${G.greenBorder}`,
+                  borderRadius: 10, padding: '12px 14px', marginBottom: 16,
+                }}>
+                  <p style={{ color: G.greenText, margin: 0, fontSize: 14 }}>
+                    This unit was dispatched to your shop. Confirm receipt?
+                  </p>
+                </div>
+                <button onClick={handleConfirm} disabled={loading} style={btn(G.green)}>
+                  {loading ? 'Processing…' : 'Confirm receive'}
+                </button>
+              </>
+            )}
+
+            {/* SELL */}
+            {action === 'sell' && (
+              <>
+                {/* Price summary strip */}
+                <div style={{
+                  background: G.surfaceSecondary, borderRadius: 10,
+                  padding: '12px 14px', marginBottom: 20,
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                }}>
+                  <div>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: G.textPrimary, margin: '0 0 2px' }}>
+                      {unit.product?.name}
+                    </p>
+                    <p style={{ fontSize: 12, color: G.textSecondary, margin: 0 }}>{unit.unitCode}</p>
+                  </div>
+                  <p style={{ fontSize: 16, fontWeight: 600, color: G.green, margin: 0 }}>
+                    ₹{Number(unit.product?.sellingPrice).toLocaleString('en-IN')}
+                  </p>
+                </div>
+
+                <p style={sectionLabelStyle}>Customer name</p>
+                <input
+                  placeholder="e.g. Rahul Patil"
+                  value={clientName}
+                  onChange={e => setClientName(e.target.value)}
+                  style={{ ...inputStyle, marginBottom: 14 }}
+                />
+
+                <p style={sectionLabelStyle}>WhatsApp number</p>
+                <input
+                  placeholder="e.g. 9876543210"
+                  type="tel"
+                  value={clientPhone}
+                  onChange={e => setClientPhone(e.target.value)}
+                  style={{ ...inputStyle, marginBottom: 14 }}
+                />
+
+                <p style={sectionLabelStyle}>Payment method</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 20 }}>
+                  {[
+                    { key: 'cash', label: 'Cash' },
+                    { key: 'upi', label: 'UPI' },
+                    { key: 'card', label: 'Card' },
+                    { key: 'credit', label: 'Credit' },
+                  ].map(({ key, label }) => (
+                    <button
+                      key={key}
+                      onClick={() => setPaymentMethod(key)}
+                      style={{
+                        padding: '10px 8px',
+                        borderRadius: 8,
+                        cursor: 'pointer',
+                        border: paymentMethod === key
+                          ? `1.5px solid ${G.green}`
+                          : `0.5px solid rgba(0,0,0,0.12)`,
+                        background: paymentMethod === key ? G.greenLight : G.surface,
+                        color: paymentMethod === key ? G.greenText : G.textSecondary,
+                        fontWeight: paymentMethod === key ? 600 : 400,
+                        fontSize: 13,
+                        fontFamily: font,
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                <button onClick={handleConfirm} disabled={loading} style={btn(G.green)}>
+                  {loading ? 'Processing…' : `Confirm sale${unit.product?.sellingPrice ? ` — ₹${Number(unit.product.sellingPrice).toLocaleString('en-IN')}` : ''}`}
+                </button>
+              </>
+            )}
+
+            <div style={{ textAlign: 'center', marginTop: 12 }}>
+              <button onClick={reset} style={{
+                background: 'none', border: 'none', color: G.textTertiary,
+                cursor: 'pointer', fontSize: 13, fontFamily: font,
+              }}>
+                ← Scan again
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 3 — Invoice */}
+        {step === 'invoice' && invoice && (
+          <div>
+            {/* Success state */}
+            <div style={{ textAlign: 'center', padding: '24px 0 20px' }}>
+              <div style={{
+                width: 56, height: 56, borderRadius: '50%',
+                background: G.greenLight, display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+                margin: '0 auto 12px',
+              }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <path d="M5 12l5 5L19 7" stroke={G.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <p style={{ fontSize: 17, fontWeight: 600, color: G.textPrimary, margin: '0 0 2px' }}>Sale complete</p>
+              <p style={{ fontSize: 13, color: G.textTertiary }}>{invoice.invoiceNumber}</p>
+            </div>
+
+            {/* Invoice card */}
+            <div style={{ ...cardStyle, padding: 0, overflow: 'hidden', marginBottom: 12 }}>
+              {/* Header strip */}
+              <div style={{
+                background: G.green, padding: '14px 16px',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}>
+                <div>
+                  <p style={{ color: '#fff', fontSize: 13, fontWeight: 600, margin: '0 0 2px' }}>
+                    Reliable Dairy Equipments
+                  </p>
+                  <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11, letterSpacing: '0.5px', margin: 0 }}>
                     PUNE
                   </p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <p style={{ color: '#c17f3a', margin: 0, fontSize: 11, letterSpacing: 1 }}>INVOICE</p>
-                  <p style={{ color: '#fff', margin: '2px 0 0', fontSize: 11 }}>{invoice.invoiceNumber}</p>
+                  <p style={{ color: G.orange, fontSize: 10, fontWeight: 600, letterSpacing: '1px', margin: '0 0 2px' }}>
+                    INVOICE
+                  </p>
+                  <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11, margin: 0 }}>
+                    {invoice.invoiceNumber}
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ padding: '16px' }}>
+                {/* Customer */}
+                <div style={invoiceRowStyle}>
+                  <p style={sectionLabelStyle}>Customer</p>
+                  <p style={invoiceValueStyle}>{invoice.clientName || '—'}</p>
+                  {invoice.clientPhone && (
+                    <p style={{ color: G.textSecondary, fontSize: 12, margin: '2px 0 0' }}>
+                      +91 {invoice.clientPhone}
+                    </p>
+                  )}
+                </div>
+
+                {/* Product */}
+                <div style={invoiceRowStyle}>
+                  <p style={sectionLabelStyle}>Product</p>
+                  <p style={invoiceValueStyle}>{invoice.productName}</p>
+                  <p style={{ color: G.textTertiary, fontSize: 11, margin: '2px 0 0', letterSpacing: '0.3px' }}>
+                    Unit: {invoice.unitCode}
+                  </p>
+                </div>
+
+                {/* Amount + Payment */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, ...invoiceRowStyle }}>
+                  <div>
+                    <p style={sectionLabelStyle}>Amount</p>
+                    <p style={{ fontSize: 20, fontWeight: 600, color: G.green, margin: 0 }}>
+                      ₹{Number(invoice.sellingPrice).toLocaleString('en-IN')}
+                    </p>
+                  </div>
+                  <div>
+                    <p style={sectionLabelStyle}>Payment</p>
+                    <span style={badge('green')}>{invoice.paymentMethod?.toUpperCase()}</span>
+                  </div>
+                </div>
+
+                {/* Date + Sold by */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <div>
+                    <p style={sectionLabelStyle}>Date</p>
+                    <p style={invoiceValueStyle}>
+                      {new Date(invoice.soldAt).toLocaleDateString('en-IN', {
+                        day: 'numeric', month: 'short', year: 'numeric',
+                      })}
+                    </p>
+                  </div>
+                  <div>
+                    <p style={sectionLabelStyle}>Sold by</p>
+                    <p style={invoiceValueStyle}>{invoice.soldBy}</p>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Invoice body */}
-            <div style={{ padding: '20px' }}>
-              {/* Customer */}
-              <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #e8e8e0' }}>
-                <p style={invoiceLabelStyle}>CUSTOMER</p>
-                <p style={invoiceValueStyle}>{invoice.clientName || '—'}</p>
-                {invoice.clientPhone && (
-                  <p style={{ color: '#888', fontSize: 12, margin: '2px 0 0' }}>
-                    +91 {invoice.clientPhone}
-                  </p>
-                )}
-              </div>
-
-              {/* Product */}
-              <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #e8e8e0' }}>
-                <p style={invoiceLabelStyle}>PRODUCT</p>
-                <p style={invoiceValueStyle}>{invoice.productName}</p>
-                <p style={{ color: '#888', fontSize: 11, margin: '2px 0 0', letterSpacing: 0.5 }}>
-                  Unit: {invoice.unitCode}
-                </p>
-              </div>
-
-              {/* Amount + Payment */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #e8e8e0' }}>
-                <div>
-                  <p style={invoiceLabelStyle}>AMOUNT</p>
-                  <p style={{ color: '#1a4a2e', fontSize: 20, fontWeight: 700, margin: 0 }}>
-                    ₹{Number(invoice.sellingPrice).toLocaleString('en-IN')}
-                  </p>
-                </div>
-                <div>
-                  <p style={invoiceLabelStyle}>PAYMENT</p>
-                  <p style={invoiceValueStyle}>{invoice.paymentMethod?.toUpperCase()}</p>
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <div>
-                  <p style={invoiceLabelStyle}>DATE</p>
-                  <p style={invoiceValueStyle}>
-                    {new Date(invoice.soldAt).toLocaleDateString('en-IN', {
-                      day: 'numeric', month: 'short', year: 'numeric'
-                    })}
-                  </p>
-                </div>
-                <div>
-                  <p style={invoiceLabelStyle}>SOLD BY</p>
-                  <p style={invoiceValueStyle}>{invoice.soldBy}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Actions */}
-          {invoice.clientPhone && (
-            <button onClick={() => {
-              generateInvoice();
-              setTimeout(() => sendWhatsApp(), 500);
-            }} style={{
-              ...actionBtn('#25d366'),
-              marginBottom: 8,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
-            }}>
-              📱 Send WhatsApp
+            {/* Actions */}
+            {invoice.clientPhone && (
+              <button
+                onClick={() => { generateInvoice(); setTimeout(() => sendWhatsApp(), 500); }}
+                style={{ ...btn(G.whatsapp), marginBottom: 8 }}
+              >
+                Send WhatsApp
+              </button>
+            )}
+            <button onClick={generateInvoice} style={{ ...btn(G.orange), marginBottom: 8 }}>
+              Print invoice
             </button>
-          )}
+            <button onClick={reset} style={btnGhost}>
+              Scan next unit
+            </button>
+          </div>
+        )}
 
-          <button onClick={generateInvoice} style={{
-            ...actionBtn('#c17f3a'), marginBottom: 8
-          }}>
-            🖨 Print Invoice
-          </button>
+        {/* STEP 3 — Done (non-sell) */}
+        {step === 'done' && (
+          <div style={{ textAlign: 'center', padding: '48px 0' }}>
+            <div style={{
+              width: 64, height: 64, borderRadius: '50%',
+              background: G.greenLight, display: 'flex',
+              alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 16px',
+            }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                <path d="M5 12l5 5L19 7" stroke={G.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <p style={{ fontSize: 16, fontWeight: 600, color: G.textPrimary, marginBottom: 6 }}>Done</p>
+            <p style={{ fontSize: 14, color: G.textSecondary, marginBottom: 28 }}>{message}</p>
+            <button onClick={reset} style={btn(G.green)}>
+              Scan next unit
+            </button>
+          </div>
+        )}
 
-          <button onClick={reset} style={{
-            width: '100%', padding: '13px', background: '#f5f5f0', color: '#666',
-            border: '1px solid #e8e8e0', borderRadius: 4, fontSize: 11,
-            fontWeight: 700, cursor: 'pointer', letterSpacing: 1,
-            fontFamily: 'Georgia, serif'
-          }}>
-            Scan Next Unit
-          </button>
-        </div>
-      )}
-
-      {/* STEP 3 — Done (for non-sell actions) */}
-      {step === 'done' && (
-        <div style={{ textAlign: 'center', padding: '40px 0' }}>
-          <div style={{ fontSize: 64, marginBottom: 16 }}>✅</div>
-          <p style={{ color: '#1a4a2e', fontSize: 18, fontWeight: 700, marginBottom: 24 }}>
-            {message}
-          </p>
-          <button onClick={reset} style={actionBtn('#1a4a2e')}>
-            Scan Next Unit
-          </button>
-        </div>
-      )}
+      </div>
     </div>
   );
 }
 
+/* ─── Style helpers ───────────────────────────────────────── */
+
+const font = "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif";
+
 const cardStyle = {
-  background: '#ffffff', border: '1px solid #e8e8e0',
-  borderRadius: 4, padding: '14px 16px', marginBottom: 20,
-  boxShadow: '0 1px 4px rgba(26,74,46,0.05)'
+  background: '#FFFFFF',
+  border: '0.5px solid rgba(0,0,0,0.08)',
+  borderRadius: 12,
+  padding: '14px 16px',
+  marginBottom: 10,
 };
-const actionBtn = (color) => ({
-  width: '100%', padding: '14px', background: color, color: '#fff',
-  border: 'none', borderRadius: 4, fontSize: 13, fontWeight: 700,
-  cursor: 'pointer', letterSpacing: 1, fontFamily: 'Georgia, serif'
-});
+
+const sectionLabelStyle = {
+  fontSize: 11,
+  fontWeight: 600,
+  textTransform: 'uppercase',
+  letterSpacing: '0.7px',
+  color: '#9A9A96',
+  margin: '0 0 8px',
+};
+
 const inputStyle = {
-  width: '100%', padding: '11px 14px', background: '#fafaf7',
-  border: '1px solid #d4d4c8', borderRadius: 4, color: '#1a1a1a',
-  fontSize: 14, outline: 'none', boxSizing: 'border-box', fontFamily: 'Georgia, serif'
+  width: '100%',
+  padding: '10px 14px',
+  background: '#FAFAF7',
+  border: '0.5px solid rgba(0,0,0,0.12)',
+  borderRadius: 8,
+  color: '#111110',
+  fontSize: 14,
+  outline: 'none',
+  boxSizing: 'border-box',
+  fontFamily: font,
 };
-const labelStyle = {
-  color: '#888', fontSize: 10, letterSpacing: 1.5,
-  display: 'block', marginBottom: 8, fontWeight: 700
+
+const selectStyle = {
+  width: '100%',
+  padding: '10px 14px',
+  background: '#FFFFFF',
+  border: '0.5px solid rgba(0,0,0,0.12)',
+  borderRadius: 8,
+  color: '#111110',
+  fontSize: 13,
+  outline: 'none',
+  cursor: 'pointer',
+  fontFamily: font,
 };
-const invoiceLabelStyle = {
-  color: '#888', fontSize: 10, letterSpacing: 1.5,
-  margin: '0 0 4px', fontWeight: 700
+
+const btn = (color) => ({
+  width: '100%',
+  padding: '13px',
+  background: color,
+  color: '#fff',
+  border: 'none',
+  borderRadius: 8,
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: 'pointer',
+  fontFamily: font,
+  letterSpacing: '0.2px',
+  marginBottom: 8,
+});
+
+const btnGhost = {
+  width: '100%',
+  padding: '13px',
+  background: '#EFEFEB',
+  color: '#6B6B68',
+  border: '0.5px solid rgba(0,0,0,0.08)',
+  borderRadius: 8,
+  fontSize: 13,
+  fontWeight: 500,
+  cursor: 'pointer',
+  fontFamily: font,
 };
+
+const badge = (type) => ({
+  display: 'inline-block',
+  fontSize: 11,
+  fontWeight: 600,
+  padding: '3px 10px',
+  borderRadius: 20,
+  letterSpacing: '0.4px',
+  ...(type === 'green'
+    ? { background: '#E8F5EE', color: '#166534', border: '1px solid #BBF7D0' }
+    : { background: '#FFF7ED', color: '#9A3412', border: '1px solid #FED7AA' }),
+});
+
+const invoiceRowStyle = {
+  marginBottom: 14,
+  paddingBottom: 14,
+  borderBottom: '0.5px solid rgba(0,0,0,0.06)',
+};
+
 const invoiceValueStyle = {
-  color: '#1a1a1a', fontSize: 14, margin: 0, fontWeight: 600
+  fontSize: 14,
+  fontWeight: 600,
+  color: '#111110',
+  margin: 0,
 };

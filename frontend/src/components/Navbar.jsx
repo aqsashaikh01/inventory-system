@@ -37,6 +37,7 @@ export default function Navbar() {
         {navItem('/scan', 'SCAN')}
         {user?.role === 'admin' && navItem('/dashboard', 'DASHBOARD')}
         {user?.role === 'admin' && navItem('/products', 'PRODUCTS')}
+        {user?.role === 'admin' && navItem('/workers', 'WORKERS')}
         <div style={{ width: 1, height: 20, background: '#e8e8e0' }} />
         <div style={{ textAlign: 'right' }}>
           <p style={{ margin: 0, fontSize: 11, color: '#1a4a2e', fontWeight: 600 }}>{user?.name}</p>

@@ -7,6 +7,7 @@ import DashboardPage from './pages/DashboardPage';
 import ScanPage from './pages/ScanPage';
 import ProductsPage from './pages/ProductsPage';
 import ProductDetailPage from './pages/ProductDetailPage';
+import WorkersPage from './pages/WorkersPage';
 
 function Layout({ children }) {
   return (
@@ -52,6 +53,12 @@ export default function App() {
           <Route path="/products/:id" element={
             <ProtectedRoute roles={['admin']}>
               <Layout><ProductDetailPage /></Layout>
+            </ProtectedRoute>
+          } />
+
+          <Route path="/workers" element={
+            <ProtectedRoute roles={['admin']}>
+              <Layout><WorkersPage /></Layout>
             </ProtectedRoute>
           } />
 

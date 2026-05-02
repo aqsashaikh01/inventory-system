@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 
@@ -23,6 +23,32 @@ const G = {
 
 const font = "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif";
 
+// Returns YYYY-MM-DD in local time (avoids UTC offset bugs)
+const toLocalDate = (d) => {
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+const getPresetRange = (preset) => {
+  const now = new Date();
+  const today = toLocalDate(now);
+  if (preset === 'today') return { start: today, end: today };
+  if (preset === 'yesterday') {
+    const y = new Date(now); y.setDate(y.getDate() - 1);
+    const s = toLocalDate(y);
+    return { start: s, end: s };
+  }
+  if (preset === 'week') {
+    const w = new Date(now); w.setDate(w.getDate() - 6);
+    return { start: toLocalDate(w), end: today };
+  }
+  if (preset === 'month') {
+    const m = new Date(now); m.setDate(m.getDate() - 29);
+    return { start: toLocalDate(m), end: today };
+  }
+  return { start: today, end: today };
+};
+
 export default function DashboardPage() {
   const { user } = useAuth();
   const [daily, setDaily] = useState(null);
@@ -30,31 +56,83 @@ export default function DashboardPage() {
   const [movements, setMovements] = useState([]);
   const [tab, setTab] = useState('sales');
   const [loading, setLoading] = useState(true);
+  const [salesLoading, setSalesLoading] = useState(false);
 
-  // Sales filters
-  const [dateFilter, setDateFilter] = useState('today');
+  // Date filter state
+  const [preset, setPreset] = useState('today');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+  const [isCustom, setIsCustom] = useState(false);
+
+  // Outlet filter
   const [outletFilter, setOutletFilter] = useState('all');
 
+  const fetchSales = useCallback((startDate, endDate) => {
+    setSalesLoading(true);
+    api.get('/dashboard/daily', { params: { startDate, endDate } })
+      .then(r => setDaily(r.data))
+      .catch(() => setDaily(null))
+      .finally(() => setSalesLoading(false));
+  }, []);
+
+  // Initial load
   useEffect(() => {
     if (user?.role === 'admin') {
-      Promise.all([
-        api.get('/dashboard/daily'),
+      const { start, end } = getPresetRange('today');
+      Promise.allSettled([
+        api.get('/dashboard/daily', { params: { startDate: start, endDate: end } }),
         api.get('/dashboard/inventory'),
-        api.get('/dashboard/movements')
+        api.get('/dashboard/movements'),
       ]).then(([d, inv, mov]) => {
-        setDaily(d.data);
-        setInventory(inv.data);
-        setMovements(mov.data);
+        if (d.status === 'fulfilled') setDaily(d.value.data);
+        if (inv.status === 'fulfilled') setInventory(inv.value.data);
+        if (mov.status === 'fulfilled') setMovements(mov.value.data);
       }).finally(() => setLoading(false));
     }
   }, [user]);
+
+  // Re-fetch sales on filter change
+  useEffect(() => {
+    if (!user || user.role !== 'admin' || loading) return;
+    if (isCustom) {
+      if (customStart && customEnd && customStart <= customEnd) {
+        fetchSales(customStart, customEnd);
+      }
+    } else {
+      const { start, end } = getPresetRange(preset);
+      fetchSales(start, end);
+    }
+    setOutletFilter('all');
+  }, [preset, isCustom, customStart, customEnd, user, loading, fetchSales]);
+
+  const handlePreset = (p) => {
+    setPreset(p);
+    setIsCustom(false);
+  };
+
+  const handleCustomApply = () => {
+    if (!customStart || !customEnd) return;
+    if (customStart > customEnd) { alert('Start date cannot be after end date'); return; }
+    setIsCustom(true);
+  };
+
+  const handleClearCustom = () => {
+    setIsCustom(false);
+    setCustomStart('');
+    setCustomEnd('');
+    setPreset('today');
+  };
+
+  const activeDateLabel = isCustom
+    ? `${customStart}  →  ${customEnd}`
+    : { today: "Today's", yesterday: "Yesterday's", week: 'Last 7 Days', month: 'Last 30 Days' }[preset];
 
   const statusLabel = (status) => ({
     generated:  'Generated',
     in_factory: 'In Factory',
     dispatched: 'Dispatched',
     in_shop:    'In Shop',
-    sold:       'Sold'
+    sold:       'Sold',
   }[status] || status);
 
   const statusDot = (status) => ({
@@ -65,8 +143,6 @@ export default function DashboardPage() {
     sold:       G.green,
   }[status] || '#9A9A96');
 
-  const dateLabel = { today: "Today's", week: "This Week's", month: "This Month's" };
-
   const filteredLocations = daily
     ? Object.entries(daily.byLocation).filter(([loc]) =>
         outletFilter === 'all' || loc === outletFilter
@@ -76,7 +152,6 @@ export default function DashboardPage() {
   const summaryTotal = filteredLocations.reduce((sum, [, d]) => sum + d.totalRevenue, 0);
   const summaryUnits = filteredLocations.reduce((sum, [, d]) => sum + d.totalUnits, 0);
   const summaryAvg = summaryUnits ? Math.round(summaryTotal / summaryUnits) : 0;
-
   const outletOptions = daily ? Object.keys(daily.byLocation) : [];
 
   if (loading) return (
@@ -122,12 +197,12 @@ export default function DashboardPage() {
         </div>
 
         {/* SALES TAB */}
-        {tab === 'sales' && daily && (
+        {tab === 'sales' && (
           <div>
             {/* Summary Strip */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: '1.5rem' }}>
               {[
-                { label: 'Total Sales', value: `₹${summaryTotal.toLocaleString('en-IN')}`, sub: dateLabel[dateFilter] },
+                { label: 'Total Sales', value: `₹${summaryTotal.toLocaleString('en-IN')}`, sub: activeDateLabel },
                 { label: 'Units Sold', value: summaryUnits, sub: outletFilter === 'all' ? 'All outlets' : outletFilter },
                 { label: 'Avg. Per Unit', value: `₹${summaryAvg.toLocaleString('en-IN')}`, sub: 'Per transaction' },
               ].map(m => (
@@ -139,29 +214,90 @@ export default function DashboardPage() {
               ))}
             </div>
 
-            {/* Filters */}
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12, fontWeight: 500, color: G.textSecondary }}>Filter by</span>
-              <select value={dateFilter} onChange={e => setDateFilter(e.target.value)} style={selectStyle}>
-                <option value="today">Today</option>
-                <option value="week">This Week</option>
-                <option value="month">This Month</option>
-              </select>
-              <select value={outletFilter} onChange={e => setOutletFilter(e.target.value)} style={selectStyle}>
-                <option value="all">All Outlets</option>
-                {outletOptions.map(o => <option key={o} value={o}>{o}</option>)}
-              </select>
+            {/* Filter Panel */}
+            <div style={{ background: G.surface, border: `0.5px solid ${G.border}`, borderRadius: 12, padding: '14px 16px', marginBottom: '1.25rem' }}>
+
+              {/* Preset pills */}
+              <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+                {[
+                  { key: 'today', label: 'Today' },
+                  { key: 'yesterday', label: 'Yesterday' },
+                  { key: 'week', label: 'Last 7 Days' },
+                  { key: 'month', label: 'Last 30 Days' },
+                ].map(p => (
+                  <button key={p.key} onClick={() => handlePreset(p.key)} style={{
+                    padding: '5px 13px',
+                    border: `1px solid ${!isCustom && preset === p.key ? G.green : G.border}`,
+                    borderRadius: 20,
+                    background: !isCustom && preset === p.key ? G.greenLight : G.surface,
+                    color: !isCustom && preset === p.key ? G.green : G.textSecondary,
+                    fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: font,
+                    transition: 'all 0.15s',
+                  }}>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom date range + outlet filter row */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: G.textTertiary, fontWeight: 500 }}>Custom</span>
+                <input
+                  type="date"
+                  value={customStart}
+                  max={toLocalDate(new Date())}
+                  onChange={e => { setCustomStart(e.target.value); setIsCustom(false); }}
+                  style={dateInputStyle}
+                />
+                <span style={{ fontSize: 12, color: G.textTertiary }}>to</span>
+                <input
+                  type="date"
+                  value={customEnd}
+                  max={toLocalDate(new Date())}
+                  onChange={e => { setCustomEnd(e.target.value); setIsCustom(false); }}
+                  style={dateInputStyle}
+                />
+                <button onClick={handleCustomApply} disabled={!customStart || !customEnd} style={{
+                  padding: '6px 14px', background: customStart && customEnd ? G.green : G.surfaceSecondary,
+                  color: customStart && customEnd ? '#fff' : G.textTertiary,
+                  border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 500,
+                  cursor: customStart && customEnd ? 'pointer' : 'default', fontFamily: font,
+                }}>
+                  Apply
+                </button>
+                {isCustom && (
+                  <button onClick={handleClearCustom} style={{
+                    padding: '6px 12px', background: 'none', color: G.textSecondary,
+                    border: `1px solid ${G.border}`, borderRadius: 8, fontSize: 12,
+                    cursor: 'pointer', fontFamily: font,
+                  }}>
+                    Clear
+                  </button>
+                )}
+
+                {/* Outlet filter pushed to right */}
+                <div style={{ marginLeft: 'auto' }}>
+                  <select value={outletFilter} onChange={e => setOutletFilter(e.target.value)} style={selectStyle}>
+                    <option value="all">All Outlets</option>
+                    {outletOptions.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+              </div>
             </div>
 
             {/* Section Label */}
             <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.7px', color: G.textTertiary, marginBottom: 10 }}>
-              {dateLabel[dateFilter]} Sales by Outlet
+              {activeDateLabel} · Sales by Outlet
             </div>
 
-            {/* Outlet Cards */}
-            {filteredLocations.length === 0 ? (
+            {/* Results */}
+            {salesLoading ? (
+              <div style={{ textAlign: 'center', padding: 40, color: G.textSecondary, fontSize: 14 }}>
+                Loading sales...
+              </div>
+            ) : filteredLocations.length === 0 ? (
               <div style={{ ...cardStyle, textAlign: 'center', padding: 40 }}>
-                <p style={{ color: G.textSecondary, fontSize: 14 }}>No sales recorded yet.</p>
+                <p style={{ color: G.textSecondary, fontSize: 14 }}>No sales recorded for this period.</p>
               </div>
             ) : (
               filteredLocations.map(([loc, data]) => (
@@ -292,6 +428,18 @@ const cardStyle = {
 
 const selectStyle = {
   fontSize: 13,
+  padding: '6px 10px',
+  border: '0.5px solid rgba(0,0,0,0.15)',
+  borderRadius: 8,
+  background: '#FFFFFF',
+  color: '#111110',
+  cursor: 'pointer',
+  fontFamily: "'DM Sans', sans-serif",
+  outline: 'none',
+};
+
+const dateInputStyle = {
+  fontSize: 12,
   padding: '6px 10px',
   border: '0.5px solid rgba(0,0,0,0.15)',
   borderRadius: 8,

@@ -4,9 +4,12 @@ const protect = require('../middleware/auth');
 
 // GET /api/dashboard/daily — today's sales from units
 router.get('/daily', protect('admin'), async (req, res) => {
-  const start = new Date();
+  const { startDate, endDate } = req.query;
+
+  const start = startDate ? new Date(startDate) : new Date();
   start.setHours(0, 0, 0, 0);
-  const end = new Date();
+
+  const end = endDate ? new Date(endDate) : new Date();
   end.setHours(23, 59, 59, 999);
 
   try {
@@ -18,7 +21,6 @@ router.get('/daily', protect('admin'), async (req, res) => {
       .populate('currentLocation', 'name')
       .populate('scannedBy', 'name');
 
-    // Group by location
     const byLocation = {};
     soldUnits.forEach(u => {
       const locName = u.currentLocation?.name || 'Unknown';
@@ -78,6 +80,56 @@ router.get('/movements', protect('admin'), async (req, res) => {
       .populate('scannedBy', 'name role');
 
     res.json(units);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/stock-by-location', protect('admin'), async (req, res) => {
+  try {
+    const units = await require('../models/Unit').find({
+      status: { $in: ['in_factory', 'dispatched', 'in_shop', 'sold'] }
+    })
+      .populate('product', 'name sku category')
+      .populate('currentLocation', 'name type')
+      .populate('dispatchedTo', 'name type');
+
+    const locations = await require('../models/Location').find();
+
+    // Build stock map: { locationName: { productName: count } }
+    const stockMap = {};
+
+    locations.forEach(l => {
+      stockMap[l.name] = { _id: l._id, type: l.type, products: {} };
+    });
+
+    units.forEach(unit => {
+      const productName = unit.product?.name;
+      if (!productName) return;
+
+      if (unit.status === 'in_factory' && unit.currentLocation) {
+        const locName = unit.currentLocation.name;
+        if (!stockMap[locName]) return;
+        if (!stockMap[locName].products[productName]) stockMap[locName].products[productName] = 0;
+        stockMap[locName].products[productName]++;
+      }
+
+      if (unit.status === 'in_shop' && unit.currentLocation) {
+        const locName = unit.currentLocation.name;
+        if (!stockMap[locName]) return;
+        if (!stockMap[locName].products[productName]) stockMap[locName].products[productName] = 0;
+        stockMap[locName].products[productName]++;
+      }
+
+      if (unit.status === 'dispatched' && unit.dispatchedTo) {
+        const locName = unit.dispatchedTo.name + ' (In Transit)';
+        if (!stockMap[locName]) stockMap[locName] = { products: {} };
+        if (!stockMap[locName].products[productName]) stockMap[locName].products[productName] = 0;
+        stockMap[locName].products[productName]++;
+      }
+    });
+
+    res.json(stockMap);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
