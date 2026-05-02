@@ -108,7 +108,9 @@ export default function ProductsPage() {
 
 // ─── Product Card ──────────────────────────────────────────────────────────────
 function ProductCard({ product, apiBase, onClick, onQR }) {
-  const imgSrc = product.photo ? `${apiBase}${product.photo}` : null;
+  const imgSrc = product.photo
+  ? product.photo.startsWith('http') ? product.photo : `${apiBase}${product.photo}`
+  : null;
   const [hovered, setHovered] = useState(false);
 
   return (

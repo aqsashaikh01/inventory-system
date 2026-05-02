@@ -145,10 +145,13 @@ export default function ProductDetailPage() {
   };
 
   const getImageSrc = () => {
-    if (preview) return preview;
-    if (product?.photo) return `${API_BASE}${product.photo}${cacheBust}`;
-    return null;
-  };
+  if (preview) return preview;
+  if (product?.photo) {
+    const p = product.photo;
+    return p.startsWith('http') ? p : `${API_BASE}${p}${cacheBust}`;
+  }
+  return null;
+};
 
   if (!product) return (
     <div style={{ textAlign: 'center', padding: 60, color: G.textSecondary, fontFamily: font, fontSize: 14 }}>

@@ -3,25 +3,7 @@ const Product = require('../models/Product');
 const Inventory = require('../models/Inventory');
 const protect = require('../middleware/auth');
 const { generateQRDataURL } = require('../utils/qr');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
-
-// Setup upload folder
-const uploadDir = path.join(__dirname, '../uploads');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${Date.now()}${ext}`);
-  }
-});
-const upload = multer({ storage });
-
-// Serve uploaded images statically — add this in index.js too
-// app.use('/uploads', express.static('uploads'));
+const { upload } = require('../config/cloudinary');
 
 // GET all products
 router.get('/', protect(), async (req, res) => {
@@ -71,7 +53,7 @@ router.get('/qr/:sku', protect('admin'), async (req, res) => {
   }
 });
 
-// POST create product with optional photo
+// POST create product
 router.post('/', protect('admin'), upload.single('photo'), async (req, res) => {
   const { name, category, sellingPrice, description } = req.body;
   try {
@@ -79,7 +61,8 @@ router.post('/', protect('admin'), upload.single('photo'), async (req, res) => {
     const sku = `PROD-${String(count + 1).padStart(3, '0')}`;
     const { scanUrl, dataUrl } = await generateQRDataURL(sku, process.env.APP_URL);
 
-    const photoUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    // Cloudinary returns full https URL in req.file.path
+    const photoUrl = req.file ? req.file.path : null;
 
     const product = await Product.create({
       name, category, sellingPrice, description,
@@ -98,10 +81,9 @@ router.put('/:id', protect('admin'), upload.single('photo'), async (req, res) =>
   try {
     const { name, category, sellingPrice, description } = req.body;
     const update = { name, category, sellingPrice, description };
-    if (req.file) update.photo = `/uploads/${req.file.filename}`;
 
-    console.log('Update body:', req.body);
-    console.log('File received:', req.file);
+    // Cloudinary returns full https URL
+    if (req.file) update.photo = req.file.path;
 
     const product = await Product.findByIdAndUpdate(
       req.params.id,
@@ -110,10 +92,8 @@ router.put('/:id', protect('admin'), upload.single('photo'), async (req, res) =>
     );
 
     if (!product) return res.status(404).json({ error: 'Product not found' });
-
     res.json(product);
   } catch (err) {
-    console.log('Update error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
