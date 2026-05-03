@@ -8,6 +8,7 @@ import ScanPage from './pages/ScanPage';
 import ProductsPage from './pages/ProductsPage';
 import ProductDetailPage from './pages/ProductDetailPage';
 import WorkersPage from './pages/WorkersPage';
+import WorkerProductsPage from './pages/WorkerProductsPage';
 
 function Layout({ children }) {
   return (
@@ -59,6 +60,12 @@ export default function App() {
           <Route path="/workers" element={
             <ProtectedRoute roles={['admin']}>
               <Layout><WorkersPage /></Layout>
+            </ProtectedRoute>
+          } />
+
+          <Route path="/catalogue" element={
+            <ProtectedRoute>
+              <Layout><WorkerProductsPage /></Layout>
             </ProtectedRoute>
           } />
 

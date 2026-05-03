@@ -35,6 +35,7 @@ export default function Navbar() {
 
       <div style={{ display: 'flex', gap: 28, alignItems: 'center' }}>
         {navItem('/scan', 'SCAN')}
+        {user?.role !== 'admin' && navItem('/catalogue', 'PRODUCTS')}
         {user?.role === 'admin' && navItem('/dashboard', 'DASHBOARD')}
         {user?.role === 'admin' && navItem('/products', 'PRODUCTS')}
         {user?.role === 'admin' && navItem('/workers', 'WORKERS')}
