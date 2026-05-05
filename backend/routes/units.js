@@ -4,33 +4,79 @@ const Product = require('../models/Product');
 const protect = require('../middleware/auth');
 const QRCode = require('qrcode');
 const JSZip = require('jszip');
+const path = require('path');
+const fs = require('fs');
+const { createCanvas, loadImage } = require('canvas');
+const sharp = require('sharp');
+
+// Pre-load font as base64 once at startup
+const fontFilePath = path.join(__dirname, '../assets/NotoSansDevanagari-SemiBold.ttf');
+let fontBase64 = null;
+if (fs.existsSync(fontFilePath)) {
+  fontBase64 = fs.readFileSync(fontFilePath).toString('base64');
+  console.log('✓ Devanagari font loaded as base64');
+} else {
+  console.warn('✗ Devanagari font NOT found at:', fontFilePath);
+}
+
+// Renders Marathi text via sharp SVG → PNG buffer → loadable by canvas
+const renderMarathiText = async (text, widthPx = 270, heightPx = 30) => {
+  const escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+  const fontStyle = fontBase64
+    ? `@font-face { font-family: 'ND'; src: url('data:font/truetype;base64,${fontBase64}'); font-weight: 600; }`
+    : '';
+  const fontFamily = fontBase64 ? 'ND, sans-serif' : 'sans-serif';
+
+  const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${widthPx}" height="${heightPx}">
+    <defs><style>${fontStyle}</style></defs>
+    <rect width="${widthPx}" height="${heightPx}" fill="white"/>
+    <text
+      x="${widthPx / 2}"
+      y="${heightPx * 0.78}"
+      font-family="${fontFamily}"
+      font-size="15"
+      font-weight="600"
+      fill="#111110"
+      text-anchor="middle">${escaped}</text>
+  </svg>`);
+
+  // sharp renders SVG with embedded fonts to PNG reliably
+  return await sharp(svg, { density: 150 }).png().toBuffer();
+};
 
 // POST /api/units/generate
-// Admin selects product + quantity → generates N unique unit QRs
 router.post('/generate', protect('admin'), async (req, res) => {
   const { productId, quantity } = req.body;
   try {
     const product = await Product.findById(productId);
     if (!product) return res.status(404).json({ error: 'Product not found' });
 
+    const marathiName = product.marathiName || product.name;
     const existing = await Unit.countDocuments({ product: productId });
-
     const zip = new JSZip();
     const folder = zip.folder(`QR-${product.sku}`);
 
-    const { createCanvas, loadImage } = require('canvas');
+    // Load logo once
+    const logoPath = path.join(__dirname, '../assets/logo.png');
+    let logoImage = null;
+    if (fs.existsSync(logoPath)) logoImage = await loadImage(logoPath);
+
+    // Pre-render Marathi name as PNG buffer via sharp (same for all units)
+    const marathiPngBuffer = await renderMarathiText(marathiName, 270, 30);
+    const textImage = await loadImage(marathiPngBuffer);
 
     for (let i = 0; i < quantity; i++) {
       const num = String(existing + i + 1).padStart(3, '0');
       const unitCode = `${product.sku}-UNIT-${num}`;
       const scanUrl = `${process.env.APP_URL}/unit/${unitCode}`;
 
-      // Generate QR as data URL
-      const qrDataUrl = await QRCode.toDataURL(scanUrl, { width: 300, margin: 2 });
-
-      // Create canvas — QR + label below
       const canvasWidth = 300;
-      const canvasHeight = 360;
+      const canvasHeight = 460;
       const canvas = createCanvas(canvasWidth, canvasHeight);
       const ctx = canvas.getContext('2d');
 
@@ -38,41 +84,65 @@ router.post('/generate', protect('admin'), async (req, res) => {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-      // Draw QR image
-      const qrImage = await loadImage(qrDataUrl);
-      ctx.drawImage(qrImage, 0, 0, 300, 300);
+      let yOffset = 12;
 
-      // Divider line
+      // --- LOGO ---
+      if (logoImage) {
+        const logoH = 48;
+        const logoW = (logoImage.width / logoImage.height) * logoH;
+        ctx.drawImage(logoImage, (canvasWidth - logoW) / 2, yOffset, logoW, logoH);
+        yOffset += logoH + 8;
+      }
+
+      // --- Divider ---
       ctx.strokeStyle = '#e8e8e0';
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 0.5;
       ctx.beginPath();
-      ctx.moveTo(16, 308);
-      ctx.lineTo(284, 308);
+      ctx.moveTo(16, yOffset);
+      ctx.lineTo(284, yOffset);
       ctx.stroke();
+      yOffset += 10;
 
-      // Price
-      ctx.fillStyle = '#1a4a2e';
-      ctx.font = 'bold 16px Arial';
+      // --- Marathi name (rendered via sharp, drawn as image) ---
+      ctx.drawImage(textImage, (canvasWidth - 270) / 2, yOffset, 270, 30);
+      yOffset += 30 + 6;
+
+      // --- QR Code ---
+      const qrDataUrl = await QRCode.toDataURL(scanUrl, { width: 240, margin: 1 });
+      const qrImage = await loadImage(qrDataUrl);
+      ctx.drawImage(qrImage, (canvasWidth - 240) / 2, yOffset, 240, 240);
+      yOffset += 240 + 8;
+
+      // --- Divider ---
+      ctx.strokeStyle = '#e8e8e0';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(16, yOffset);
+      ctx.lineTo(284, yOffset);
+      ctx.stroke();
+      yOffset += 12;
+
+      // --- MRP ---
+      ctx.fillStyle = '#9A9A96';
+      ctx.font = '11px Arial';
       ctx.textAlign = 'center';
-      ctx.fillText(`MRP. ${Number(product.sellingPrice).toLocaleString('en-IN')}`, 150, 340);
+      ctx.fillText('Maximum Retail Price', 150, yOffset);
+      yOffset += 18;
 
-      // Convert canvas to PNG buffer
+      ctx.fillStyle = '#1a4a2e';
+      ctx.font = 'bold 18px Arial';
+      ctx.fillText(`₹${Number(product.sellingPrice).toLocaleString('en-IN')}`, 150, yOffset);
+
       const buffer = canvas.toBuffer('image/png');
       folder.file(`${unitCode}.png`, buffer);
 
-      // Save unit to DB
-      await Unit.create({
-        unitCode,
-        product: productId,
-        qrCodeUrl: scanUrl
-      });
+      await Unit.create({ unitCode, product: productId, qrCodeUrl: scanUrl });
     }
 
     const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
-
     res.set({
       'Content-Type': 'application/zip',
-      'Content-Disposition': `attachment; filename="QR-${product.sku}-${quantity}units.zip"`
+      'Content-Disposition': `attachment; filename="QR-${product.sku}-${quantity}units.zip"`,
     });
     res.send(zipBuffer);
 
@@ -83,7 +153,6 @@ router.post('/generate', protect('admin'), async (req, res) => {
 });
 
 // GET /api/units/scan/:unitCode
-// Called when any worker scans a unit QR
 router.get('/scan/:unitCode', protect(), async (req, res) => {
   try {
     const unit = await Unit.findOne({ unitCode: req.params.unitCode })
@@ -97,11 +166,6 @@ router.get('/scan/:unitCode', protect(), async (req, res) => {
     const locationType = user.location?.type;
     const role = user.role;
     const userLocationId = user.location?._id?.toString();
-
-    // Add this debug log temporarily
-    console.log('Unit dispatchedTo:', unit.dispatchedTo?._id?.toString());
-    console.log('User location:', userLocationId);
-    console.log('Unit status:', unit.status);
 
     let availableAction = null;
 
@@ -130,7 +194,6 @@ router.get('/scan/:unitCode', protect(), async (req, res) => {
 });
 
 // POST /api/units/stock-in/:unitCode
-// Factory scans → auto added to factory inventory
 router.post('/stock-in/:unitCode', protect('admin'), async (req, res) => {
   try {
     const unit = await Unit.findOne({ unitCode: req.params.unitCode }).populate('product');
@@ -150,7 +213,6 @@ router.post('/stock-in/:unitCode', protect('admin'), async (req, res) => {
 });
 
 // POST /api/units/dispatch/:unitCode
-// Admin dispatches unit to a shop
 router.post('/dispatch/:unitCode', protect('admin'), async (req, res) => {
   const { toLocationId } = req.body;
   try {
@@ -171,7 +233,6 @@ router.post('/dispatch/:unitCode', protect('admin'), async (req, res) => {
 });
 
 // POST /api/units/receive/:unitCode
-// Shop worker scans dispatched unit → added to shop inventory
 router.post('/receive/:unitCode', protect(['admin', 'shop_worker']), async (req, res) => {
   try {
     const unit = await Unit.findOne({ unitCode: req.params.unitCode });
@@ -191,8 +252,6 @@ router.post('/receive/:unitCode', protect(['admin', 'shop_worker']), async (req,
 });
 
 // POST /api/units/sell/:unitCode
-// Shop worker confirms sell
-// POST /api/units/sell/:unitCode
 router.post('/sell/:unitCode', protect(['admin', 'shop_worker']), async (req, res) => {
   const { clientName, clientPhone, paymentMethod } = req.body;
   try {
@@ -209,7 +268,6 @@ router.post('/sell/:unitCode', protect(['admin', 'shop_worker']), async (req, re
     unit.paymentMethod = paymentMethod || 'cash';
     await unit.save();
 
-    // Build invoice data to return
     const invoice = {
       invoiceNumber: `INV-${unit.unitCode}`,
       unitCode: unit.unitCode,
@@ -220,7 +278,7 @@ router.post('/sell/:unitCode', protect(['admin', 'shop_worker']), async (req, re
       paymentMethod: unit.paymentMethod,
       soldAt: unit.soldAt,
       soldBy: req.user.name,
-      location: req.user.location?.name
+      location: req.user.location?.name,
     };
 
     res.json({ success: true, invoice, unit });
@@ -230,7 +288,6 @@ router.post('/sell/:unitCode', protect(['admin', 'shop_worker']), async (req, re
 });
 
 // GET /api/units/product/:productId
-// List all units for a product
 router.get('/product/:productId', protect('admin'), async (req, res) => {
   try {
     const units = await Unit.find({ product: req.params.productId })

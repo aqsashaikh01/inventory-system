@@ -51,7 +51,8 @@ export default function ProductDetailPage() {
           name: r.data.name,
           category: r.data.category || '',
           sellingPrice: r.data.sellingPrice,
-          description: r.data.description || ''
+          description: r.data.description || '',
+          marathiName: r.data.marathiName || '',    
         });
       })
       .catch(() => {
@@ -104,6 +105,7 @@ export default function ProductDetailPage() {
       formData.append('category', form.category);
       formData.append('sellingPrice', form.sellingPrice);
       formData.append('description', form.description);
+      formData.append('marathiName', form.marathiName);
       if (newPhoto) formData.append('photo', newPhoto);
 
       const res = await api.put(`/products/${id}`, formData);
@@ -113,7 +115,8 @@ export default function ProductDetailPage() {
         name: res.data.name,
         category: res.data.category || '',
         sellingPrice: res.data.sellingPrice,
-        description: res.data.description || ''
+        description: res.data.description || '',
+        marathiName: res.data.marathiName || '',
       });
       setEditing(false);
       setNewPhoto(null);
@@ -312,6 +315,22 @@ export default function ProductDetailPage() {
                   {product.name}
                 </h2>
               )}
+
+              <div style={{ marginBottom: 20 }}>
+                <div style={fieldLabel}>Marathi Name</div>
+                {editing ? (
+                  <input
+                    value={form.marathiName}
+                    onChange={e => setForm(p => ({ ...p, marathiName: e.target.value }))}
+                    placeholder="उत्पादनाचे नाव"
+                    style={inputStyle}
+                  />
+                ) : (
+                  <div style={{ fontSize: 16, fontWeight: 500, color: G.textPrimary }}>
+                    {product.marathiName || <span style={{ color: G.textTertiary }}>—</span>}
+                  </div>
+                )}
+              </div>
 
               {/* Price + Category row */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>

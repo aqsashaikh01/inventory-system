@@ -167,7 +167,7 @@ function ProductCard({ product, apiBase, onClick, onQR }) {
 
 // ─── Add Product Modal ─────────────────────────────────────────────────────────
 function ProductModal({ title, onSubmit, onClose, loading }) {
-  const [form, setForm] = useState({ name: '', category: '', sellingPrice: '', description: '' });
+  const [form, setForm] = useState({ name: '', category: '', sellingPrice: '', description: '', marathiName: '' });
   const [photo, setPhoto] = useState(null);
   const [preview, setPreview] = useState(null);
 
@@ -183,6 +183,7 @@ function ProductModal({ title, onSubmit, onClose, loading }) {
     formData.append('category', form.category);
     formData.append('sellingPrice', form.sellingPrice);
     formData.append('description', form.description);
+    formData.append('marathiName', form.marathiName);
     if (photo) formData.append('photo', photo);
     onSubmit(formData);
   };
@@ -214,6 +215,10 @@ function ProductModal({ title, onSubmit, onClose, loading }) {
 
           <input placeholder="Product name *" required value={form.name}
             onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+            style={{ ...inputStyle, marginBottom: 12 }} />
+          
+          <input placeholder="Product name (In Marathi)" value={form.marathiName}
+            onChange={e => setForm(p => ({ ...p, marathiName: e.target.value }))}
             style={{ ...inputStyle, marginBottom: 12 }} />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
