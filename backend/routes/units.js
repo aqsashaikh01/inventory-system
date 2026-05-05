@@ -9,16 +9,6 @@ const fs = require('fs');
 const { createCanvas, loadImage } = require('canvas');
 const sharp = require('sharp');
 
-// Pre-load font as base64 once at startup
-const fontFilePath = path.join(__dirname, '../assets/NotoSansDevanagari-SemiBold.ttf');
-let fontBase64 = null;
-if (fs.existsSync(fontFilePath)) {
-  fontBase64 = fs.readFileSync(fontFilePath).toString('base64');
-  console.log('✓ Devanagari font loaded as base64');
-} else {
-  console.warn('✗ Devanagari font NOT found at:', fontFilePath);
-}
-
 // Renders Marathi text via sharp SVG → PNG buffer → loadable by canvas
 const renderMarathiText = async (text, widthPx = 270, heightPx = 30) => {
   const escaped = text
@@ -27,25 +17,18 @@ const renderMarathiText = async (text, widthPx = 270, heightPx = 30) => {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 
-  const fontStyle = fontBase64
-    ? `@font-face { font-family: 'ND'; src: url('data:font/truetype;base64,${fontBase64}'); font-weight: 600; }`
-    : '';
-  const fontFamily = fontBase64 ? 'ND, sans-serif' : 'sans-serif';
-
   const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${widthPx}" height="${heightPx}">
-    <defs><style>${fontStyle}</style></defs>
     <rect width="${widthPx}" height="${heightPx}" fill="white"/>
     <text
       x="${widthPx / 2}"
       y="${heightPx * 0.78}"
-      font-family="${fontFamily}"
+      font-family="Noto Sans Devanagari, sans-serif"
       font-size="15"
       font-weight="600"
       fill="#111110"
       text-anchor="middle">${escaped}</text>
   </svg>`);
 
-  // sharp renders SVG with embedded fonts to PNG reliably
   return await sharp(svg, { density: 150 }).png().toBuffer();
 };
 
