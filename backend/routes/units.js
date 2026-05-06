@@ -8,6 +8,7 @@ const path = require('path');
 const fs = require('fs');
 const { createCanvas, loadImage } = require('canvas');
 const sharp = require('sharp');
+process.env.FONTCONFIG_PATH = '/tmp/fonts';
 
 // Renders Marathi text via sharp SVG → PNG buffer → loadable by canvas
 const renderMarathiText = async (text, widthPx = 270, heightPx = 30) => {
