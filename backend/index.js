@@ -31,7 +31,6 @@ connectDB();
 const app = express();
 app.use(cors({ origin: '*' }));
 app.use(express.json());
-const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.post('/api/test', (req, res) => {
