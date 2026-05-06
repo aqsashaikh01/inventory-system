@@ -1,3 +1,25 @@
+const fs = require('fs');
+const path = require('path');
+
+// Copy Devanagari font to /tmp at startup for sharp/librsvg
+const fontSrc = path.join(__dirname, 'assets/NotoSansDevanagari-SemiBold.ttf');
+const fontDir = '/tmp/fonts';
+const fontDst = path.join(fontDir, 'NotoSansDevanagari-SemiBold.ttf');
+const fontConf = path.join(fontDir, 'fonts.conf');
+
+if (!fs.existsSync(fontDir)) fs.mkdirSync(fontDir, { recursive: true });
+if (!fs.existsSync(fontDst)) fs.copyFileSync(fontSrc, fontDst);
+if (!fs.existsSync(fontConf)) {
+  fs.writeFileSync(fontConf, `<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <dir>/tmp/fonts</dir>
+</fontconfig>`);
+}
+
+process.env.FONTCONFIG_PATH = fontDir;
+console.log('✓ Font setup complete');
+
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
