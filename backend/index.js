@@ -46,7 +46,5 @@ app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/units', require('./routes/units'));
 app.use('/api/workers', require('./routes/workers'));
 
-app.get('/', (req, res) => res.send('Inventory API running'));
-
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
