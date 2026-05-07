@@ -2,7 +2,7 @@ const router = require('express').Router();
 const Location = require('../models/Location');
 const protect = require('../middleware/auth');
 
-// GET all locations
+// GET all locations by their outlets
 router.get('/', async (req, res) => {
   const locations = await Location.find();
   res.json(locations);
