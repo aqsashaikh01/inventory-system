@@ -24,7 +24,7 @@ const renderMarathiText = async (text, widthPx = 540, heightPx = 120) => {
 
   if (words.length <= 1 || text.length <= 10) {
     textSvg = `<text x="${widthPx / 2}" y="${heightPx * 0.62}"
-      font-family="Noto Sans Devanagari, sans-serif" font-size="44" font-weight="700"
+      font-family="Noto Sans Devanagari, sans-serif" font-size="56" font-weight="700"
       fill="#111110" text-anchor="middle">${escapeXml(text)}</text>`;
   } else {
     const mid = Math.ceil(words.length / 2);
@@ -32,10 +32,10 @@ const renderMarathiText = async (text, widthPx = 540, heightPx = 120) => {
     const line2 = escapeXml(words.slice(mid).join(' '));
     textSvg = `
       <text x="${widthPx / 2}" y="${heightPx * 0.35}"
-        font-family="Noto Sans Devanagari, sans-serif" font-size="44" font-weight="700"
+        font-family="Noto Sans Devanagari, sans-serif" font-size="56" font-weight="700"
         fill="#111110" text-anchor="middle">${line1}</text>
       <text x="${widthPx / 2}" y="${heightPx * 0.75}"
-        font-family="Noto Sans Devanagari, sans-serif" font-size="44" font-weight="700"
+        font-family="Noto Sans Devanagari, sans-serif" font-size="56" font-weight="700"
         fill="#111110" text-anchor="middle">${line2}</text>`;
   }
 
@@ -59,13 +59,8 @@ router.post('/generate', protect('admin'), async (req, res) => {
     const zip = new JSZip();
     const folder = zip.folder(`QR-${product.sku}`);
 
-    // Load logo once
-    const logoPath = path.join(__dirname, '../assets/logo.png');
-    let logoImage = null;
-    if (fs.existsSync(logoPath)) logoImage = await loadImage(logoPath);
-
     // Pre-render Marathi name as PNG buffer via sharp (same for all units)
-    const marathiPngBuffer = await renderMarathiText(marathiName, 540, 120);
+    const marathiPngBuffer = await renderMarathiText(marathiName, 540, 160);
     const textImage = await loadImage(marathiPngBuffer);
 
     for (let i = 0; i < quantity; i++) {
@@ -82,29 +77,21 @@ router.post('/generate', protect('admin'), async (req, res) => {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-      let yOffset = 24;
-
-      // --- LOGO ---
-      if (logoImage) {
-        const logoH = 130;
-        const logoW = (logoImage.width / logoImage.height) * logoH;
-        ctx.drawImage(logoImage, (canvasWidth - logoW) / 2, yOffset, logoW, logoH);
-        yOffset += logoH + 20;
-      }
+      let yOffset = 30;
 
       // --- Marathi name (rendered via sharp, drawn as image) ---
-      ctx.drawImage(textImage, (canvasWidth - 540) / 2, yOffset, 540, 120);
-      yOffset += 120 + 8;
+      ctx.drawImage(textImage, (canvasWidth - 540) / 2, yOffset, 540, 160);
+      yOffset += 160 + 20;
 
       // --- QR Code ---
-      const qrDataUrl = await QRCode.toDataURL(scanUrl, { width: 480, margin: 1 });
+      const qrDataUrl = await QRCode.toDataURL(scanUrl, { width: 540, margin: 1 });
       const qrImage = await loadImage(qrDataUrl);
-      ctx.drawImage(qrImage, (canvasWidth - 480) / 2, yOffset, 480, 480);
-      yOffset += 480 + 40;
+      ctx.drawImage(qrImage, (canvasWidth - 540) / 2, yOffset, 540, 540);
+      yOffset += 540 + 30;
 
       // --- MRP ---
       ctx.fillStyle = '#1a4a2e';
-      ctx.font = 'bold 32px Arial';
+      ctx.font = 'bold 40px Arial';
       ctx.textAlign = 'center';
       ctx.fillText(`Maximum Retail Price - ${Number(product.sellingPrice).toLocaleString('en-IN')}`, canvasWidth / 2, yOffset);
 
