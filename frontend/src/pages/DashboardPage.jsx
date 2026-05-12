@@ -57,6 +57,7 @@ export default function DashboardPage() {
   const [tab, setTab] = useState('sales');
   const [loading, setLoading] = useState(true);
   const [salesLoading, setSalesLoading] = useState(false);
+  const [deleteModal, setDeleteModal] = useState({ open: false, inv: null, password: '', error: '', deleting: false });
 
   // Date filter state
   const [preset, setPreset] = useState('today');
@@ -153,6 +154,32 @@ export default function DashboardPage() {
   const summaryUnits = filteredLocations.reduce((sum, [, d]) => sum + d.totalUnits, 0);
   const summaryAvg = summaryUnits ? Math.round(summaryTotal / summaryUnits) : 0;
   const outletOptions = daily ? Object.keys(daily.byLocation) : [];
+
+  const openDeleteModal = (inv) =>
+    setDeleteModal({ open: true, inv, password: '', error: '', deleting: false });
+
+  const closeDeleteModal = () =>
+    setDeleteModal({ open: false, inv: null, password: '', error: '', deleting: false });
+
+  const handleDeleteConfirm = async () => {
+    if (deleteModal.password !== 'admin123') {
+      setDeleteModal(m => ({ ...m, error: 'Incorrect password. Please try again.' }));
+      return;
+    }
+    const productId = deleteModal.inv?.product?._id;
+    if (!productId) {
+      setDeleteModal(m => ({ ...m, error: 'Product reference is missing. Refresh the page.' }));
+      return;
+    }
+    setDeleteModal(m => ({ ...m, deleting: true, error: '' }));
+    try {
+      await api.delete(`/products/${productId}`);
+      setInventory(prev => prev.filter(i => i.product?._id !== productId));
+      closeDeleteModal();
+    } catch {
+      setDeleteModal(m => ({ ...m, deleting: false, error: 'Failed to delete. Please try again.' }));
+    }
+  };
 
   if (loading) return (
     <div style={{ textAlign: 'center', padding: 60, color: G.textSecondary, fontFamily: font, fontSize: 14 }}>
@@ -358,19 +385,38 @@ export default function DashboardPage() {
                       {inv.location?.name} · SKU: {inv.product?.sku}
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <span style={{
-                      background: inv.quantity < 3 ? G.redLight : G.greenStockLight,
-                      color: inv.quantity < 3 ? G.red : G.greenStock,
-                      border: `1px solid ${inv.quantity < 3 ? G.redBorder : G.greenStockBorder}`,
-                      padding: '4px 14px', borderRadius: 20,
-                      fontWeight: 600, fontSize: 15,
-                    }}>
-                      {inv.quantity}
-                    </span>
-                    <div style={{ fontSize: 10, color: G.textTertiary, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      {inv.location?.type === 'factory' ? 'Factory' : 'Shop'}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{
+                        background: inv.quantity < 3 ? G.redLight : G.greenStockLight,
+                        color: inv.quantity < 3 ? G.red : G.greenStock,
+                        border: `1px solid ${inv.quantity < 3 ? G.redBorder : G.greenStockBorder}`,
+                        padding: '4px 14px', borderRadius: 20,
+                        fontWeight: 600, fontSize: 15,
+                      }}>
+                        {inv.quantity}
+                      </span>
+                      <div style={{ fontSize: 10, color: G.textTertiary, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        {inv.location?.type === 'factory' ? 'Factory' : 'Shop'}
+                      </div>
                     </div>
+                    <button
+                      onClick={() => openDeleteModal(inv)}
+                      style={{
+                        background: G.redLight,
+                        color: G.red,
+                        border: `1px solid ${G.redBorder}`,
+                        borderRadius: 8,
+                        padding: '6px 12px',
+                        fontSize: 12,
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        fontFamily: font,
+                        flexShrink: 0,
+                      }}
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
               ))
@@ -414,6 +460,78 @@ export default function DashboardPage() {
         )}
 
       </div>
+
+      {/* Delete confirmation modal */}
+      {deleteModal.open && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }}
+          onClick={closeDeleteModal}
+        >
+          <div style={{
+            background: G.surface, borderRadius: 16, padding: '28px 24px',
+            width: 340, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', fontFamily: font,
+          }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 16, fontWeight: 600, color: G.textPrimary, marginBottom: 6 }}>
+              Delete Product
+            </div>
+            <div style={{ fontSize: 13, color: G.textSecondary, marginBottom: 20 }}>
+              This will permanently remove <strong>{deleteModal.inv?.product?.name}</strong> from the inventory.
+              Enter the admin password to confirm.
+            </div>
+
+            <input
+              type="password"
+              placeholder="Enter password"
+              value={deleteModal.password}
+              autoFocus
+              onChange={e => setDeleteModal(m => ({ ...m, password: e.target.value, error: '' }))}
+              onKeyDown={e => e.key === 'Enter' && handleDeleteConfirm()}
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                padding: '10px 12px', fontSize: 14,
+                border: `1px solid ${deleteModal.error ? G.red : G.border}`,
+                borderRadius: 8, fontFamily: font, outline: 'none',
+                marginBottom: deleteModal.error ? 8 : 20,
+              }}
+            />
+
+            {deleteModal.error && (
+              <div style={{ fontSize: 12, color: G.red, marginBottom: 16 }}>
+                {deleteModal.error}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={closeDeleteModal} style={{
+                flex: 1, padding: '10px', border: `1px solid ${G.border}`,
+                borderRadius: 8, background: G.surface, color: G.textSecondary,
+                fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: font,
+              }}>
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={deleteModal.deleting || !deleteModal.password}
+                style={{
+                  flex: 1, padding: '10px',
+                  border: 'none', borderRadius: 8,
+                  background: deleteModal.deleting || !deleteModal.password ? G.redLight : G.red,
+                  color: deleteModal.deleting || !deleteModal.password ? '#f87171' : '#fff',
+                  fontSize: 13, fontWeight: 600, cursor: deleteModal.deleting || !deleteModal.password ? 'default' : 'pointer',
+                  fontFamily: font,
+                }}
+              >
+                {deleteModal.deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

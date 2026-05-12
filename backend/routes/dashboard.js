@@ -48,10 +48,11 @@ router.get('/inventory', protect('admin'), async (req, res) => {
       .populate('product', 'name category sku sellingPrice')
       .populate('currentLocation', 'name type');
 
-    // Group by product + location
+    // Group by product + location (skip orphaned units whose product was deleted)
     const grouped = {};
     units.forEach(u => {
-      const key = `${u.product?._id}_${u.currentLocation?._id}`;
+      if (!u.product || !u.currentLocation) return;
+      const key = `${u.product._id}_${u.currentLocation._id}`;
       if (!grouped[key]) {
         grouped[key] = {
           product: u.product,
