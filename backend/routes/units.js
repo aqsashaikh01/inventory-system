@@ -3,12 +3,15 @@ const Unit = require('../models/Unit');
 const Product = require('../models/Product');
 const protect = require('../middleware/auth');
 const QRCode = require('qrcode');
-const JSZip = require('jszip');
-const path = require('path');
-const fs = require('fs');
+const PDFDocument = require('pdfkit');
 const { createCanvas, loadImage } = require('canvas');
 const sharp = require('sharp');
 process.env.FONTCONFIG_PATH = '/tmp/fonts';
+
+// Label dimensions in PDF points (1mm = 2.8346pt)
+const MM = 2.8346;
+const LABEL_W = 50 * MM;
+const LABEL_H = 75 * MM;
 
 const escapeXml = (s) => s
   .replace(/&/g, '&amp;')
@@ -56,12 +59,19 @@ router.post('/generate', protect('admin'), async (req, res) => {
 
     const marathiName = product.marathiName || product.name;
     const existing = await Unit.countDocuments({ product: productId });
-    const zip = new JSZip();
-    const folder = zip.folder(`QR-${product.sku}`);
 
-    // Pre-render Marathi name as PNG buffer via sharp (same for all units)
+    // Pre-render Marathi name once (same for all units)
     const marathiPngBuffer = await renderMarathiText(marathiName, 540, 160);
     const textImage = await loadImage(marathiPngBuffer);
+
+    // Set up PDF — each page = one label
+    const doc = new PDFDocument({ autoFirstPage: false, margin: 0 });
+    const pdfReady = new Promise((resolve, reject) => {
+      const chunks = [];
+      doc.on('data', c => chunks.push(c));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+    });
 
     for (let i = 0; i < quantity; i++) {
       const num = String(existing + i + 1).padStart(3, '0');
@@ -79,7 +89,7 @@ router.post('/generate', protect('admin'), async (req, res) => {
 
       let yOffset = 30;
 
-      // --- Marathi name (rendered via sharp, drawn as image) ---
+      // --- Marathi name ---
       ctx.drawImage(textImage, (canvasWidth - 540) / 2, yOffset, 540, 160);
       yOffset += 160 + 20;
 
@@ -95,18 +105,22 @@ router.post('/generate', protect('admin'), async (req, res) => {
       ctx.textAlign = 'center';
       ctx.fillText(`Maximum Retail Price - ${Number(product.sellingPrice).toLocaleString('en-IN')}`, canvasWidth / 2, yOffset);
 
-      const buffer = canvas.toBuffer('image/png');
-      folder.file(`${unitCode}.png`, buffer);
+      const pngBuffer = canvas.toBuffer('image/png');
+
+      doc.addPage({ size: [LABEL_W, LABEL_H], margins: { top: 0, bottom: 0, left: 0, right: 0 } });
+      doc.image(pngBuffer, 0, 0, { width: LABEL_W, height: LABEL_H });
 
       await Unit.create({ unitCode, product: productId, qrCodeUrl: scanUrl });
     }
 
-    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+    doc.end();
+    const pdfBuffer = await pdfReady;
+
     res.set({
-      'Content-Type': 'application/zip',
-      'Content-Disposition': `attachment; filename="QR-${product.sku}-${quantity}units.zip"`,
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="stickers-${product.sku}-${quantity}units.pdf"`,
     });
-    res.send(zipBuffer);
+    res.send(pdfBuffer);
 
   } catch (err) {
     console.log('Generate error:', err.message);

@@ -83,15 +83,17 @@ export default function ProductDetailPage() {
         { productId: id, quantity: genQty },
         { responseType: 'blob' }
       );
-      const url = window.URL.createObjectURL(new Blob([res.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `QR-${product.sku}-${genQty}units.zip`;
-      link.click();
-      window.URL.revokeObjectURL(url);
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const printWin = window.open(url, '_blank');
+      if (printWin) {
+        printWin.addEventListener('load', () => printWin.print());
+      }
+      // Keep URL alive long enough for the window to load it
+      setTimeout(() => window.URL.revokeObjectURL(url), 120000);
       setShowGenerateQR(false);
     } catch (err) {
-      alert('Error generating QR codes');
+      alert('Error generating stickers');
     } finally {
       setGenLoading(false);
     }
@@ -520,7 +522,7 @@ export default function ProductDetailPage() {
             />
           </div>
           <p style={{ color: G.textSecondary, fontSize: 13, marginBottom: 20, lineHeight: 1.6 }}>
-            A ZIP file with <strong>{genQty}</strong> unique QR code image{genQty !== 1 ? 's' : ''} will be downloaded. Print and stick one on each unit.
+            <strong>{genQty}</strong> sticker{genQty !== 1 ? 's' : ''} will open as a PDF. A print dialog will appear — select your <strong>Dcode 421 Pro</strong> and print.
           </p>
 
           <button onClick={handleGenerateQR} disabled={genLoading} style={{
@@ -531,7 +533,7 @@ export default function ProductDetailPage() {
             fontFamily: font, marginBottom: 8,
             opacity: genLoading ? 0.7 : 1,
           }}>
-            {genLoading ? 'Generating…' : `Generate & Download ${genQty} QR Code${genQty !== 1 ? 's' : ''}`}
+            {genLoading ? 'Generating…' : `Generate & Print ${genQty} Sticker${genQty !== 1 ? 's' : ''}`}
           </button>
           <button onClick={() => setShowGenerateQR(false)} style={{
             width: '100%', padding: '12px',
