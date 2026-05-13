@@ -57,8 +57,12 @@ router.get('/qr/:sku', protect('admin'), async (req, res) => {
 router.post('/', protect('admin'), upload.single('photo'), async (req, res) => {
   const { name, category, sellingPrice, description } = req.body;
   try {
-    const count = await Product.countDocuments();
-    const sku = `PROD-${String(count + 1).padStart(3, '0')}`;
+    const allSkus = await Product.find({}, { sku: 1 }).lean();
+    const maxNum = allSkus.reduce((max, p) => {
+      const m = p.sku?.match(/PROD-(\d+)/);
+      return m ? Math.max(max, parseInt(m[1])) : max;
+    }, 0);
+    const sku = `PROD-${String(maxNum + 1).padStart(3, '0')}`;
     const { scanUrl, dataUrl } = await generateQRDataURL(sku, process.env.APP_URL);
 
     // Cloudinary returns full https URL in req.file.path
