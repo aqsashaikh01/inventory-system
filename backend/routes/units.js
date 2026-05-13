@@ -98,7 +98,7 @@ router.post('/generate', protect('admin'), async (req, res) => {
       const qrDataUrl = await QRCode.toDataURL(scanUrl, { width: 560, margin: 1 });
       const qrImage = await loadImage(qrDataUrl);
       ctx.drawImage(qrImage, (canvasWidth - 560) / 2, yOffset, 560, 560);
-      yOffset += 560 + 12;
+      yOffset += 560 + 28;
 
       // --- MRP ---
       ctx.fillStyle = '#1a4a2e';
