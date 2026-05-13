@@ -8,10 +8,10 @@ const { createCanvas, loadImage } = require('canvas');
 const sharp = require('sharp');
 process.env.FONTCONFIG_PATH = '/tmp/fonts';
 
-// Label dimensions in PDF points (1mm = 2.8346pt)
+// Label dimensions in PDF points (1mm = 2.8346pt) — 50×60mm roll
 const MM = 2.8346;
 const LABEL_W = 50 * MM;
-const LABEL_H = 75 * MM;
+const LABEL_H = 60 * MM;
 
 const escapeXml = (s) => s
   .replace(/&/g, '&amp;')
@@ -21,24 +21,24 @@ const escapeXml = (s) => s
 
 // Renders Marathi text via sharp SVG → PNG buffer → loadable by canvas
 // Supports automatic two-line wrapping for longer names
-const renderMarathiText = async (text, widthPx = 540, heightPx = 120) => {
+const renderMarathiText = async (text, widthPx = 540, heightPx = 120, fontSize = 56) => {
   const words = text.split(' ');
   let textSvg;
 
   if (words.length <= 1 || text.length <= 10) {
-    textSvg = `<text x="${widthPx / 2}" y="${heightPx * 0.62}"
-      font-family="Noto Sans Devanagari, sans-serif" font-size="56" font-weight="700"
+    textSvg = `<text x="${widthPx / 2}" y="${heightPx * 0.65}"
+      font-family="Noto Sans Devanagari, sans-serif" font-size="${fontSize}" font-weight="700"
       fill="#111110" text-anchor="middle">${escapeXml(text)}</text>`;
   } else {
     const mid = Math.ceil(words.length / 2);
     const line1 = escapeXml(words.slice(0, mid).join(' '));
     const line2 = escapeXml(words.slice(mid).join(' '));
     textSvg = `
-      <text x="${widthPx / 2}" y="${heightPx * 0.35}"
-        font-family="Noto Sans Devanagari, sans-serif" font-size="56" font-weight="700"
+      <text x="${widthPx / 2}" y="${heightPx * 0.38}"
+        font-family="Noto Sans Devanagari, sans-serif" font-size="${fontSize}" font-weight="700"
         fill="#111110" text-anchor="middle">${line1}</text>
-      <text x="${widthPx / 2}" y="${heightPx * 0.75}"
-        font-family="Noto Sans Devanagari, sans-serif" font-size="56" font-weight="700"
+      <text x="${widthPx / 2}" y="${heightPx * 0.80}"
+        font-family="Noto Sans Devanagari, sans-serif" font-size="${fontSize}" font-weight="700"
         fill="#111110" text-anchor="middle">${line2}</text>`;
   }
 
@@ -60,8 +60,8 @@ router.post('/generate', protect('admin'), async (req, res) => {
     const marathiName = product.marathiName || product.name;
     const existing = await Unit.countDocuments({ product: productId });
 
-    // Pre-render Marathi name once (same for all units)
-    const marathiPngBuffer = await renderMarathiText(marathiName, 540, 160);
+    // Pre-render Marathi name once — 560px wide, 100px tall, font 36px
+    const marathiPngBuffer = await renderMarathiText(marathiName, 560, 100, 36);
     const textImage = await loadImage(marathiPngBuffer);
 
     // Set up PDF — each page = one label
@@ -79,7 +79,7 @@ router.post('/generate', protect('admin'), async (req, res) => {
       const scanUrl = `${process.env.APP_URL}/unit/${unitCode}`;
 
       const canvasWidth = 600;
-      const canvasHeight = 880;
+      const canvasHeight = 720;  // matches 50×60mm ratio
       const canvas = createCanvas(canvasWidth, canvasHeight);
       const ctx = canvas.getContext('2d');
 
@@ -87,21 +87,21 @@ router.post('/generate', protect('admin'), async (req, res) => {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-      let yOffset = 30;
+      let yOffset = 20;
 
       // --- Marathi name ---
-      ctx.drawImage(textImage, (canvasWidth - 540) / 2, yOffset, 540, 160);
-      yOffset += 160 + 20;
+      ctx.drawImage(textImage, (canvasWidth - 560) / 2, yOffset, 560, 100);
+      yOffset += 100 + 2;
 
       // --- QR Code ---
-      const qrDataUrl = await QRCode.toDataURL(scanUrl, { width: 540, margin: 1 });
+      const qrDataUrl = await QRCode.toDataURL(scanUrl, { width: 560, margin: 1 });
       const qrImage = await loadImage(qrDataUrl);
-      ctx.drawImage(qrImage, (canvasWidth - 540) / 2, yOffset, 540, 540);
-      yOffset += 540 + 30;
+      ctx.drawImage(qrImage, (canvasWidth - 560) / 2, yOffset, 560, 560);
+      yOffset += 560 + 10;
 
       // --- MRP ---
       ctx.fillStyle = '#1a4a2e';
-      ctx.font = 'bold 40px Arial';
+      ctx.font = 'bold 28px Arial';
       ctx.textAlign = 'center';
       ctx.fillText(`Maximum Retail Price - ${Number(product.sellingPrice).toLocaleString('en-IN')}`, canvasWidth / 2, yOffset);
 
