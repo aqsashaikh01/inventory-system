@@ -83,8 +83,8 @@ router.post('/', protect('admin'), upload.single('photo'), async (req, res) => {
 // PUT update product
 router.put('/:id', protect('admin'), upload.single('photo'), async (req, res) => {
   try {
-    const { name, category, sellingPrice, description } = req.body;
-    const update = { name, category, sellingPrice, description };
+    const { name, category, sellingPrice, description, marathiName } = req.body;
+    const update = { name, category, sellingPrice, description, marathiName };
 
     // Cloudinary returns full https URL
     if (req.file) update.photo = req.file.path;
