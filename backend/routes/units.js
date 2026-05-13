@@ -8,10 +8,10 @@ const { createCanvas, loadImage } = require('canvas');
 const sharp = require('sharp');
 process.env.FONTCONFIG_PATH = '/tmp/fonts';
 
-// Label dimensions in PDF points (1mm = 2.8346pt) — 50×60mm roll
+// Label dimensions in PDF points (1mm = 2.8346pt) — 50×75mm roll
 const MM = 2.8346;
 const LABEL_W = 50 * MM;
-const LABEL_H = 60 * MM;
+const LABEL_H = 75 * MM;
 
 const escapeXml = (s) => s
   .replace(/&/g, '&amp;')
@@ -60,8 +60,8 @@ router.post('/generate', protect('admin'), async (req, res) => {
     const marathiName = product.marathiName || product.name;
     const existing = await Unit.countDocuments({ product: productId });
 
-    // Pre-render Marathi name once — 560px wide, 100px tall, font 36px
-    const marathiPngBuffer = await renderMarathiText(marathiName, 560, 100, 36);
+    // Pre-render Marathi name once — 560px wide, 160px tall, font 52px
+    const marathiPngBuffer = await renderMarathiText(marathiName, 560, 160, 52);
     const textImage = await loadImage(marathiPngBuffer);
 
     // Set up PDF — each page = one label
@@ -79,7 +79,7 @@ router.post('/generate', protect('admin'), async (req, res) => {
       const scanUrl = `${process.env.APP_URL}/unit/${unitCode}`;
 
       const canvasWidth = 600;
-      const canvasHeight = 720;  // matches 50×60mm ratio
+      const canvasHeight = 900;  // matches 50×75mm ratio
       const canvas = createCanvas(canvasWidth, canvasHeight);
       const ctx = canvas.getContext('2d');
 
@@ -87,21 +87,22 @@ router.post('/generate', protect('admin'), async (req, res) => {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-      let yOffset = 20;
+      // 50px top padding keeps the name clear of the printer's non-printable margin
+      let yOffset = 50;
 
       // --- Marathi name ---
-      ctx.drawImage(textImage, (canvasWidth - 560) / 2, yOffset, 560, 100);
-      yOffset += 100 + 2;
+      ctx.drawImage(textImage, (canvasWidth - 560) / 2, yOffset, 560, 160);
+      yOffset += 160 + 2;
 
       // --- QR Code ---
       const qrDataUrl = await QRCode.toDataURL(scanUrl, { width: 560, margin: 1 });
       const qrImage = await loadImage(qrDataUrl);
       ctx.drawImage(qrImage, (canvasWidth - 560) / 2, yOffset, 560, 560);
-      yOffset += 560 + 10;
+      yOffset += 560 + 12;
 
       // --- MRP ---
       ctx.fillStyle = '#1a4a2e';
-      ctx.font = 'bold 28px Arial';
+      ctx.font = 'bold 36px Arial';
       ctx.textAlign = 'center';
       ctx.fillText(`Maximum Retail Price - ${Number(product.sellingPrice).toLocaleString('en-IN')}`, canvasWidth / 2, yOffset);
 
