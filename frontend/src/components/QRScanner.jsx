@@ -1,56 +1,67 @@
 import { useEffect, useRef } from 'react';
-import { BrowserQRCodeReader } from '@zxing/library';
+import jsQR from 'jsqr';
 
-export default function QRScanner({ onResult }) {
-  const videoRef = useRef();
-  const hasScanned = useRef(false);
-  const readerRef = useRef();
+export default function QRScanner({ onResult, active = true }) {
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+  const timerRef = useRef(null);
+  const lastRef = useRef({ code: '', time: 0 });
 
   useEffect(() => {
-    hasScanned.current = false;
-    readerRef.current = new BrowserQRCodeReader();
+    if (!active) return;
 
-    readerRef.current.decodeFromVideoDevice(null, videoRef.current, (result, err) => {
-      if (result && !hasScanned.current) {
-        hasScanned.current = true;
-
-        // Stop camera immediately
-        if (readerRef.current) {
-          readerRef.current.reset();
-        }
-
-        const text = result.getText();
-        const sku = text.includes('/scan/') ? text.split('/scan/')[1] : text;
-        onResult(sku);
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+    }).then(stream => {
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
       }
-    });
+      tick();
+    }).catch(console.error);
+
+    function tick() {
+      timerRef.current = setTimeout(() => {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        if (video && canvas && video.readyState >= 2 && video.videoWidth > 0) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
+          ctx.drawImage(video, 0, 0);
+          const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+          if (code) {
+            const now = Date.now();
+            if (code.data !== lastRef.current.code || now - lastRef.current.time > 2000) {
+              lastRef.current = { code: code.data, time: now };
+              onResult(code.data);
+            }
+          }
+        }
+        tick();
+      }, 250);
+    }
 
     return () => {
-      if (readerRef.current) {
-        readerRef.current.reset();
-      }
+      clearTimeout(timerRef.current);
+      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
     };
-  }, []);
+  }, [active]);
 
   return (
-    <div style={{
-      width: '100%',
-      maxWidth: 360,
-      margin: '0 auto',
-      borderRadius: 12,
-      overflow: 'hidden',
-      border: '2px solid #22c55e',
-      position: 'relative',
-      background: '#000'
-    }}>
-      <video ref={videoRef} style={{ width: '100%', display: 'block' }} />
+    <div style={{ position: 'relative', background: '#000', borderRadius: 10, overflow: 'hidden' }}>
+      <video ref={videoRef} playsInline muted style={{ width: '100%', display: 'block', maxHeight: 220, objectFit: 'cover' }} />
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
       <div style={{
         position: 'absolute', top: '50%', left: '50%',
         transform: 'translate(-50%, -50%)',
-        width: 180, height: 180,
-        border: '2px solid #22c55e',
-        borderRadius: 8,
-        pointerEvents: 'none'
+        width: 140, height: 140,
+        border: '2px solid #22c55e', borderRadius: 8,
+        pointerEvents: 'none',
       }} />
     </div>
   );
