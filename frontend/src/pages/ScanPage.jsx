@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import QRScanner from '../components/QRScanner';
+import CodeScanner from '../components/CodeScanner';
+import useBarcodeGun from '../hooks/useBarcodeGun';
+import { beepOk, beepFail } from '../utils/beep';
 import api from '../utils/api';
 
 const G = {
@@ -43,12 +45,16 @@ export default function ScanPage() {
   useEffect(() => { shopLocationsRef.current = shopLocations; }, [shopLocations]);
   useEffect(() => { batchActionRef.current = batchAction; }, [batchAction]);
 
-  const handleScan = useCallback((rawCode) => {
+  // `beep` is on for gun scans only: the camera user is already looking at the
+  // screen, the gun user is looking at the goods.
+  const handleScan = useCallback((rawCode, { beep = false } = {}) => {
+    const signal = (ok) => { if (beep) (ok ? beepOk : beepFail)(); };
+
     const unitCode = rawCode.includes('/unit/') ? rawCode.split('/unit/')[1]
       : rawCode.includes('/scan/') ? rawCode.split('/scan/')[1]
       : rawCode;
 
-    if (scannedRef.current.has(unitCode)) return;
+    if (scannedRef.current.has(unitCode)) { signal(false); return; }
     scannedRef.current.add(unitCode);
 
     setQueue(prev => [...prev, { unitCode, unit: null, availableAction: null, status: 'loading', error: null, message: null }]);
@@ -58,6 +64,7 @@ export default function ScanPage() {
         const { unit, availableAction } = res.data;
 
         if (!availableAction) {
+          signal(false);
           setQueue(prev => prev.map(q => q.unitCode === unitCode
             ? { ...q, unit, status: 'error', error: STATUS_MSG[unit.status] || 'Cannot process' }
             : q));
@@ -67,23 +74,31 @@ export default function ScanPage() {
         // stock_in: auto-process immediately, no batch needed
         if (availableAction === 'stock_in') {
           api.post(`/units/stock-in/${unitCode}`)
-            .then(() => setQueue(prev => prev.map(q => q.unitCode === unitCode
-              ? { ...q, unit, availableAction, status: 'done', message: 'Added to factory' }
-              : q)))
-            .catch(err => setQueue(prev => prev.map(q => q.unitCode === unitCode
-              ? { ...q, unit, status: 'error', error: err.response?.data?.error || 'Failed' }
-              : q)));
+            .then(() => {
+              signal(true);
+              setQueue(prev => prev.map(q => q.unitCode === unitCode
+                ? { ...q, unit, availableAction, status: 'done', message: 'Added to factory' }
+                : q));
+            })
+            .catch(err => {
+              signal(false);
+              setQueue(prev => prev.map(q => q.unitCode === unitCode
+                ? { ...q, unit, status: 'error', error: err.response?.data?.error || 'Failed' }
+                : q));
+            });
           return;
         }
 
         // Mismatch with already-determined batch action
         if (batchActionRef.current && availableAction !== batchActionRef.current) {
+          signal(false);
           setQueue(prev => prev.map(q => q.unitCode === unitCode
             ? { ...q, unit, status: 'error', error: `Expected ${batchActionRef.current}, got ${availableAction}` }
             : q));
           return;
         }
 
+        signal(true);
         setQueue(prev => prev.map(q => q.unitCode === unitCode
           ? { ...q, unit, availableAction, status: 'ready' }
           : q));
@@ -101,14 +116,18 @@ export default function ScanPage() {
         }
       })
       .catch(err => {
+        signal(false);
         setQueue(prev => prev.map(q => q.unitCode === unitCode
-          ? { ...q, status: 'error', error: err.response?.data?.error || 'Invalid QR' }
+          ? { ...q, status: 'error', error: err.response?.data?.error || 'Invalid code' }
           : q));
       });
   }, []);
 
   // Handle deep-link URL code
   useEffect(() => { if (urlCode) handleScan(urlCode); }, [urlCode]);
+
+  // Barcode gun — listens alongside the camera, feeds the same queue
+  useBarcodeGun(useCallback(code => handleScan(code, { beep: true }), [handleScan]), step === 'scanning');
 
   const readyItems = queue.filter(q => q.status === 'ready');
 
@@ -278,9 +297,9 @@ export default function ScanPage() {
 
         {/* Camera — always visible while scanning */}
         <div style={{ marginBottom: 14 }}>
-          <QRScanner onResult={handleScan} active={step === 'scanning'} />
+          <CodeScanner onResult={handleScan} active={step === 'scanning'} />
           <p style={{ fontSize: 11, color: G.textTertiary, textAlign: 'center', marginTop: 6 }}>
-            Keep scanning — units queue up below
+            Keep scanning, or pull the trigger on the barcode gun — units queue up below
           </p>
         </div>
 

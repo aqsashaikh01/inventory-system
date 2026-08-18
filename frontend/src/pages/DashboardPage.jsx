@@ -57,7 +57,7 @@ export default function DashboardPage() {
   const [tab, setTab] = useState('sales');
   const [loading, setLoading] = useState(true);
   const [salesLoading, setSalesLoading] = useState(false);
-  const [deleteModal, setDeleteModal] = useState({ open: false, inv: null, password: '', error: '', deleting: false });
+  const [deleteModal, setDeleteModal] = useState({ open: false, inv: null, qty: '1', password: '', error: '', deleting: false });
 
   // Date filter state
   const [preset, setPreset] = useState('today');
@@ -156,28 +156,61 @@ export default function DashboardPage() {
   const outletOptions = daily ? Object.keys(daily.byLocation) : [];
 
   const openDeleteModal = (inv) =>
-    setDeleteModal({ open: true, inv, password: '', error: '', deleting: false });
+    setDeleteModal({ open: true, inv, qty: '1', password: '', error: '', deleting: false });
 
   const closeDeleteModal = () =>
-    setDeleteModal({ open: false, inv: null, password: '', error: '', deleting: false });
+    setDeleteModal({ open: false, inv: null, qty: '1', password: '', error: '', deleting: false });
+
+  const availableQty = deleteModal.inv?.quantity ?? 0;
+
+  // Returns an error string for the typed quantity, or '' when it's valid
+  const validateQty = (raw) => {
+    const value = String(raw).trim();
+    if (!value) return 'Enter a quantity.';
+    if (!/^\d+$/.test(value)) return 'Enter a whole number — no decimals or symbols.';
+    const n = Number(value);
+    if (n < 1) return 'Quantity must be at least 1.';
+    if (n > availableQty) return `Only ${availableQty} unit${availableQty !== 1 ? 's' : ''} in stock here.`;
+    return '';
+  };
+
+  const qtyError = validateQty(deleteModal.qty);
+  const confirmDisabled = deleteModal.deleting || !deleteModal.password || !!qtyError;
 
   const handleDeleteConfirm = async () => {
+    if (qtyError) {
+      setDeleteModal(m => ({ ...m, error: qtyError }));
+      return;
+    }
     if (deleteModal.password !== 'admin123') {
       setDeleteModal(m => ({ ...m, error: 'Incorrect password. Please try again.' }));
       return;
     }
     const productId = deleteModal.inv?.product?._id;
-    if (!productId) {
+    const locationId = deleteModal.inv?.location?._id;
+    if (!productId || !locationId) {
       setDeleteModal(m => ({ ...m, error: 'Product reference is missing. Refresh the page.' }));
       return;
     }
     setDeleteModal(m => ({ ...m, deleting: true, error: '' }));
     try {
-      await api.delete(`/products/${productId}`);
-      setInventory(prev => prev.filter(i => i.product?._id !== productId));
+      const { data } = await api.post('/units/remove-stock', {
+        productId,
+        locationId,
+        quantity: Number(deleteModal.qty),
+      });
+      setInventory(prev => prev
+        .map(i => (i.product?._id === productId && i.location?._id === locationId)
+          ? { ...i, quantity: i.quantity - data.removed }
+          : i)
+        .filter(i => i.quantity > 0));
       closeDeleteModal();
-    } catch {
-      setDeleteModal(m => ({ ...m, deleting: false, error: 'Failed to delete. Please try again.' }));
+    } catch (err) {
+      setDeleteModal(m => ({
+        ...m,
+        deleting: false,
+        error: err.response?.data?.error || 'Failed to remove stock. Please try again.',
+      }));
     }
   };
 
@@ -415,7 +448,7 @@ export default function DashboardPage() {
                         flexShrink: 0,
                       }}
                     >
-                      Delete
+                      Remove
                     </button>
                   </div>
                 </div>
@@ -476,18 +509,73 @@ export default function DashboardPage() {
             onClick={e => e.stopPropagation()}
           >
             <div style={{ fontSize: 16, fontWeight: 600, color: G.textPrimary, marginBottom: 6 }}>
-              Delete Product
+              Remove Stock
             </div>
-            <div style={{ fontSize: 13, color: G.textSecondary, marginBottom: 20 }}>
-              This will permanently remove <strong>{deleteModal.inv?.product?.name}</strong> from the inventory.
-              Enter the admin password to confirm.
+            <div style={{ fontSize: 13, color: G.textSecondary, marginBottom: 16 }}>
+              How many units of <strong>{deleteModal.inv?.product?.name}</strong> should be removed
+              from <strong>{deleteModal.inv?.location?.name}</strong>? This cannot be undone.
             </div>
 
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              background: G.bg, borderRadius: 8, padding: '8px 12px', marginBottom: 14,
+            }}>
+              <span style={{ fontSize: 12, color: G.textSecondary }}>Currently in stock</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: G.textPrimary }}>
+                {availableQty} unit{availableQty !== 1 ? 's' : ''}
+              </span>
+            </div>
+
+            <label style={{
+              display: 'block', fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
+              letterSpacing: '0.6px', color: G.textTertiary, marginBottom: 6,
+            }}>
+              Quantity to remove
+            </label>
+            <div style={{ display: 'flex', gap: 8, marginBottom: qtyError ? 6 : 14 }}>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder={`1 – ${availableQty}`}
+                value={deleteModal.qty}
+                autoFocus
+                onChange={e => setDeleteModal(m => ({ ...m, qty: e.target.value, error: '' }))}
+                onKeyDown={e => e.key === 'Enter' && handleDeleteConfirm()}
+                style={{
+                  flex: 1, minWidth: 0, boxSizing: 'border-box',
+                  padding: '10px 12px', fontSize: 14,
+                  border: `1px solid ${qtyError ? G.red : G.border}`,
+                  borderRadius: 8, fontFamily: font, outline: 'none',
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setDeleteModal(m => ({ ...m, qty: String(availableQty), error: '' }))}
+                style={{
+                  padding: '0 14px', border: `1px solid ${G.border}`, borderRadius: 8,
+                  background: G.surface, color: G.textSecondary, fontSize: 12,
+                  fontWeight: 500, cursor: 'pointer', fontFamily: font, flexShrink: 0,
+                }}
+              >
+                All
+              </button>
+            </div>
+            {qtyError && (
+              <div style={{ fontSize: 12, color: G.red, marginBottom: 14 }}>
+                {qtyError}
+              </div>
+            )}
+
+            <label style={{
+              display: 'block', fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
+              letterSpacing: '0.6px', color: G.textTertiary, marginBottom: 6,
+            }}>
+              Admin password
+            </label>
             <input
               type="password"
               placeholder="Enter password"
               value={deleteModal.password}
-              autoFocus
               onChange={e => setDeleteModal(m => ({ ...m, password: e.target.value, error: '' }))}
               onKeyDown={e => e.key === 'Enter' && handleDeleteConfirm()}
               style={{
@@ -515,17 +603,17 @@ export default function DashboardPage() {
               </button>
               <button
                 onClick={handleDeleteConfirm}
-                disabled={deleteModal.deleting || !deleteModal.password}
+                disabled={deleteModal.deleting || !deleteModal.password || !!qtyError}
                 style={{
                   flex: 1, padding: '10px',
                   border: 'none', borderRadius: 8,
-                  background: deleteModal.deleting || !deleteModal.password ? G.redLight : G.red,
-                  color: deleteModal.deleting || !deleteModal.password ? '#f87171' : '#fff',
-                  fontSize: 13, fontWeight: 600, cursor: deleteModal.deleting || !deleteModal.password ? 'default' : 'pointer',
+                  background: confirmDisabled ? G.redLight : G.red,
+                  color: confirmDisabled ? '#f87171' : '#fff',
+                  fontSize: 13, fontWeight: 600, cursor: confirmDisabled ? 'default' : 'pointer',
                   fontFamily: font,
                 }}
               >
-                {deleteModal.deleting ? 'Deleting…' : 'Delete'}
+                {deleteModal.deleting ? 'Removing…' : `Remove${qtyError ? '' : ` ${Number(deleteModal.qty)}`}`}
               </button>
             </div>
           </div>

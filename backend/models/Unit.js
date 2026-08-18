@@ -4,6 +4,9 @@ const unitSchema = new mongoose.Schema({
   unitCode: { type: String, required: true, unique: true },
   product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
   qrCodeUrl: { type: String },
+  // Which symbol is printed on this unit's sticker. Units created before the
+  // switch carry QR codes and keep scanning; everything new is Code128.
+  codeType: { type: String, enum: ['qr', 'barcode'], default: 'qr' },
   status: {
     type: String,
     enum: ['generated', 'in_factory', 'dispatched', 'in_shop', 'sold'],

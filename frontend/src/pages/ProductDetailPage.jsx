@@ -273,7 +273,7 @@ export default function ProductDetailPage() {
                 letterSpacing: '0.3px', cursor: 'pointer', fontFamily: font,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               }}>
-                <span>⬡</span> Generate Unit QR Codes
+                <span>▊</span> Generate Unit Barcodes
               </button>
 
               {/* Meta dates at bottom */}
@@ -501,7 +501,7 @@ export default function ProductDetailPage() {
           <div style={{
             fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
             letterSpacing: '0.7px', color: G.textTertiary, marginBottom: 4,
-          }}>Generate QR Codes</div>
+          }}>Generate Barcodes</div>
           <h3 style={{ color: G.textPrimary, margin: '0 0 4px', fontSize: 17, fontWeight: 700 }}>
             {product.name}
           </h3>
